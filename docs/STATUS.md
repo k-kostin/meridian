@@ -5,7 +5,8 @@
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Next-version work starts at `v0.2` and must preserve the baseline do-not-regress list.
+- Current development version: `v0.2.0 Foundation`.
+- Next-version work must preserve the baseline do-not-regress list.
 
 ## Что сейчас работает
 
@@ -54,6 +55,7 @@
 - в справочнике единиц видна точность отображения количества (`display_precision`);
 - DB-level уникальность строк по позиции защищена в документах движения и инвентаризациях;
 - перемещение между складами корректно влияет на остатки, отчеты и Excel-выгрузку движений;
+- версия приложения `v0.2.0` видна в интерфейсе и синхронизирована с Electron package version;
 
 ## Что подготовлено по desktop/gui-app направлению
 
