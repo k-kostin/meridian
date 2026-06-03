@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}{{ document.number }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">{{ document.get_document_type_display }}</span>
+        <h2>{{ document.number }}</h2>
+        <p>{{ document.warehouse.name }} · {{ document.operation_date|date:"d.m.Y" }} · {{ document.get_status_display }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'document_list' %}">Назад к документам</a>
+        {% if document.status == "draft" %}
+            <a class="button" href="{% url 'document_update' document.pk %}">Редактировать черновик</a>
+            <form method="post" action="{% url 'document_post' document.pk %}" onsubmit="return confirm('Провести документ? После проведения документ нельзя изменить.');">
+                {% csrf_token %}
+                <button type="submit" class="button primary">Провести документ</button>
+            </form>
+        {% endif %}
+    </div>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <h3>Параметры</h3>
+        <dl class="meta-list">
+            <div><dt>Тип</dt><dd>{{ document.get_document_type_display }}</dd></div>
+            <div><dt>Склад</dt><dd>{{ document.warehouse.name }}</dd></div>
+            {% if document.destination_warehouse %}
+                <div><dt>Склад-получатель</dt><dd>{{ document.destination_warehouse.name }}</dd></div>
+            {% endif %}
+            <div><dt>Статус</dt><dd>{{ document.get_status_display }}</dd></div>
+            <div><dt>Комментарий</dt><dd>{{ document.comment|default:"-" }}</dd></div>
+            {% if document.source_inventory %}
+                <div><dt>Источник</dt><dd><a class="data-link" href="{% url 'inventory_detail' document.source_inventory.pk %}">{{ document.source_inventory.number }}</a></dd></div>
+            {% endif %}
+        </dl>
+    </article>
+    <article class="card">
+        <h3>Строки</h3>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Артикул</th>
+                        <th>Номенклатура</th>
+                        <th>Количество</th>
+                        <th>Комментарий</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in document.lines.all %}
+                        <tr>
+                            <td>{{ line.item.sku }}</td>
+                            <td>{{ line.item.name }}</td>
+                            <td>{{ line.quantity|quantity:line.item.unit.display_precision }} {{ line.item.unit.code }}</td>
+                            <td>{{ line.comment|default:"-" }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+{% endblock %}

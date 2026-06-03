@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Движение</span>
+        <h2>{{ title }}</h2>
+        <p>Для прихода и расхода вводите положительное количество. Для ручной корректировки можно указывать количество со знаком.</p>
+    </div>
+</section>
+
+<form method="post" class="stack-layout">
+    {% csrf_token %}
+    <section class="card form-card">
+        {{ form.non_field_errors }}
+        <div class="form-grid">
+            {% for field in form %}
+                <div class="field"{% if field.name == "document_type" %} data-document-type-field="1"{% endif %}{% if field.name == "destination_warehouse" %} data-destination-warehouse-field="1"{% endif %}>
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                    {% if field.help_text %}
+                        <small class="field-hint">{{ field.help_text }}</small>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-head">
+            <h3>Строки документа</h3>
+            <span class="muted">Пустые строки можно оставить незаполненными.</span>
+        </div>
+        {{ formset.management_form }}
+        {{ formset.non_form_errors }}
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Номенклатура</th>
+                        <th>
+                            Количество
+                            <small class="table-hint">Приход и расход вводятся положительным числом. Для корректировки можно указать знак.</small>
+                        </th>
+                        <th>Комментарий</th>
+                        <th>Удалить</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line_form in formset %}
+                        <tr>
+                            <td>{{ line_form.item }}{{ line_form.item.errors }}</td>
+                            <td>{{ line_form.quantity }}{{ line_form.quantity.errors }}</td>
+                            <td>{{ line_form.comment }}{{ line_form.comment.errors }}</td>
+                            <td>{{ line_form.DELETE }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="actions">
+        <button type="submit" class="button primary">Сохранить черновик</button>
+        <a class="button" href="{{ back_url|default_if_none:''|default:request.path }}">Отмена</a>
+    </div>
+</form>
+
+<script>
+    (function () {
+        const typeField = document.querySelector('[data-document-type-field="1"] select');
+        const destinationField = document.querySelector('[data-destination-warehouse-field="1"]');
+        if (!typeField || !destinationField) {
+            return;
+        }
+
+        function syncTransferField() {
+            const isTransfer = typeField.value === 'transfer';
+            destinationField.hidden = !isTransfer;
+            const select = destinationField.querySelector('select');
+            if (!isTransfer && select) {
+                select.value = '';
+            }
+        }
+
+        typeField.addEventListener('change', syncTransferField);
+        syncTransferField();
+    })();
+</script>
+{% endblock %}

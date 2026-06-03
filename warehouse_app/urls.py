@@ -1,0 +1,37 @@
+from django.urls import path
+
+from . import views
+
+urlpatterns = [
+    path("healthz/", views.healthz, name="healthz"),
+    path("", views.dashboard, name="dashboard"),
+    path("setup/", views.setup_view, name="setup"),
+    path("units/", views.unit_list, name="unit_list"),
+    path("units/<int:pk>/edit/", views.unit_update, name="unit_update"),
+    path("warehouses/", views.warehouse_list, name="warehouse_list"),
+    path("warehouses/<int:pk>/edit/", views.warehouse_update, name="warehouse_update"),
+    path("items/", views.item_list, name="item_list"),
+    path("items/<int:pk>/edit/", views.item_update, name="item_update"),
+    path("documents/", views.document_list, name="document_list"),
+    path("documents/new/", views.document_create, name="document_create"),
+    path("documents/<int:pk>/edit/", views.document_update, name="document_update"),
+    path("documents/<int:pk>/", views.document_detail, name="document_detail"),
+    path("documents/<int:pk>/post/", views.document_post, name="document_post"),
+    path("inventories/", views.inventory_list, name="inventory_list"),
+    path("inventories/new/", views.inventory_create, name="inventory_create"),
+    path("inventories/<int:pk>/edit/", views.inventory_update, name="inventory_update"),
+    path("inventories/<int:pk>/", views.inventory_detail, name="inventory_detail"),
+    path("inventories/<int:pk>/post/", views.inventory_post, name="inventory_post"),
+    path("demo/load/", views.demo_load, name="demo_load"),
+    path("balances/", views.balance_report, name="balance_report"),
+    path("days/", views.daily_ledger_report, name="daily_ledger_report"),
+    path("months/", views.monthly_ledger_report, name="monthly_ledger_report"),
+    path("analytics/", views.analytics_report, name="analytics_report"),
+    path("export/items.xlsx", views.export_items, name="export_items"),
+    path("export/balances.xlsx", views.export_balances, name="export_balances"),
+    path("export/days.xlsx", views.export_daily_ledger, name="export_daily_ledger"),
+    path("export/movements.xlsx", views.export_movements, name="export_movements"),
+    path("export/inventories.xlsx", views.export_inventories, name="export_inventories"),
+    path("export/months.xlsx", views.export_monthly_ledger, name="export_monthly_ledger"),
+    path("export/analysis.xlsx", views.export_analysis, name="export_analysis"),
+]

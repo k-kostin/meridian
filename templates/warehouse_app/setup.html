@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Первичная настройка{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Старт</span>
+        <h2>Первичная настройка системы</h2>
+        <p>Сценарий старта: справочники, склады и фиксация фактических остатков через стартовую инвентаризацию.</p>
+    </div>
+</section>
+
+<section class="card checklist">
+    <div class="check-item {% if units_count %}done{% endif %}">
+        <strong class="check-item-title">1. Единицы измерения</strong>
+        <span class="check-item-meta">Заведено: {{ units_count }}</span>
+        <a class="check-item-action" href="{% url 'unit_list' %}">Открыть справочник</a>
+    </div>
+    <div class="check-item {% if warehouses_count %}done{% endif %}">
+        <strong class="check-item-title">2. Склады</strong>
+        <span class="check-item-meta">Заведено: {{ warehouses_count }}</span>
+        <a class="check-item-action" href="{% url 'warehouse_list' %}">Открыть склады</a>
+    </div>
+    <div class="check-item {% if items_count %}done{% endif %}">
+        <strong class="check-item-title">3. Номенклатура</strong>
+        <span class="check-item-meta">Заведено: {{ items_count }}</span>
+        <a class="check-item-action" href="{% url 'item_list' %}">Открыть номенклатуру</a>
+    </div>
+    <div class="check-item {% if opening_hint_ready %}done{% endif %}">
+        <strong class="check-item-title">4. Стартовые остатки</strong>
+        <span class="check-item-meta">Вводятся через полную инвентаризацию</span>
+        {% if opening_hint_ready %}
+            <a class="check-item-action" href="{% url 'inventory_create' %}?opening=1">Создать стартовую инвентаризацию</a>
+        {% else %}
+            <span class="check-item-action muted">Сначала заполните предыдущие шаги.</span>
+        {% endif %}
+    </div>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <h3>Как работает стартовая загрузка</h3>
+        <p>Система не позволяет править остатки напрямую. На старте создается полная инвентаризация, где по каждой позиции вводится фактическое наличие. После проведения система автоматически создаст корректировку из учетного значения в фактическое.</p>
+    </article>
+    <article class="card">
+        <h3>Режимы инвентаризации</h3>
+        <p><strong>Частичная</strong> учитывает только указанные позиции.</p>
+        <p><strong>Полная</strong> фиксирует целевой снимок склада и может обнулить отсутствующие остатки, если позиция не была внесена в перечень.</p>
+    </article>
+</section>
+{% endblock %}

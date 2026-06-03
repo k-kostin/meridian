@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}Помесячный отчет{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Месяцы</span>
+        <h2>Помесячный отчет</h2>
+        <p>Плоская раскладка по месяцам: остаток на начало, приход, расход, дельта и остаток на конец месяца по каждой позиции.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'export_monthly_ledger' %}{% if pagination_query %}?{{ pagination_query }}{% endif %}">Выгрузить Excel</a>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" class="inline-filters">
+        <div class="period-nav">
+            <a class="button" href="?{{ prev_period_query }}">← Предыдущий период</a>
+            <a class="button" href="?{{ next_period_query }}">Следующий период →</a>
+        </div>
+        <input type="date" class="date-input" name="date_from" value="{{ selected_date_from }}" data-autoblur-date="1">
+        <input type="date" class="date-input" name="date_to" value="{{ selected_date_to }}" data-autoblur-date="1">
+        <select name="warehouse">
+            <option value="">Все склады</option>
+            {% for warehouse in warehouses %}
+                <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="presentation">
+            <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
+            <option value="by_warehouse" {% if selected_presentation == "by_warehouse" %}selected{% endif %}>По складам</option>
+        </select>
+        <select name="page_size">
+            {% for option in page_size_options %}
+                <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="button primary">Построить месяцы</button>
+    </form>
+    <p class="muted">Период нормализуется до границ месяцев. Это функциональный аналог листа «Месяц» из Excel-light, но без ограничения одним складом.</p>
+</section>
+
+<section class="stats-grid analytics-stats">
+    <article class="card stat">
+        <span>Период</span>
+        <strong>{{ period.start|date:"m.Y" }} → {{ period.end|date:"m.Y" }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Представление</span>
+        <strong>{{ report.presentation_label }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Строк в отчете</span>
+        <strong>{{ report.summary.rows_count }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Месяцев / документов</span>
+        <strong>{{ report.summary.months_count }} / {{ report.summary.documents_count }}</strong>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h3>Помесячные показатели</h3>
+        <span class="muted">Строк движений: {{ report.summary.lines_count }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Месяц</th>
+                    {% if selected_presentation == "by_warehouse" %}
+                        <th>Склад</th>
+                    {% endif %}
+                    <th>Артикул</th>
+                    <th>Номенклатура</th>
+                    <th>Ед.</th>
+                    <th>На начало месяца</th>
+                    <th>Приход</th>
+                    <th>Расход</th>
+                    <th>Дельта</th>
+                    <th>На конец месяца</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>{{ row.month_label }}</td>
+                        {% if selected_presentation == "by_warehouse" %}
+                            <td>{{ row.warehouse_label }}</td>
+                        {% endif %}
+                        <td>{{ row.sku }}</td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.unit }}</td>
+                        <td>{{ row.opening|quantity:row.unit_precision }}</td>
+                        <td>{{ row.incoming|quantity:row.unit_precision }}</td>
+                        <td>{{ row.outgoing|quantity:row.unit_precision }}</td>
+                        <td>{{ row.net|quantity:row.unit_precision }}</td>
+                        <td>{{ row.closing|quantity:row.unit_precision }}</td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="{% if selected_presentation == 'by_warehouse' %}10{% else %}9{% endif %}" class="empty-state">Данных за выбранный диапазон месяцев пока нет.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "warehouse_app/includes/pagination.html" %}
+</section>
+{% endblock %}

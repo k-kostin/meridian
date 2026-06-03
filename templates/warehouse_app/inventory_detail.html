@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}{{ inventory.number }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">{{ inventory.get_scope_display }} инвентаризация</span>
+        <h2>{{ inventory.number }}</h2>
+        <p>{{ inventory.warehouse.name }} · {{ inventory.inventory_date|date:"d.m.Y" }} · {{ inventory.get_status_display }}</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'inventory_list' %}">Назад к инвентаризациям</a>
+        {% if inventory.status == "draft" %}
+            <a class="button" href="{% url 'inventory_update' inventory.pk %}">Редактировать черновик</a>
+            <form method="post" action="{% url 'inventory_post' inventory.pk %}" onsubmit="return confirm('Провести инвентаризацию? После проведения документ нельзя изменить.');">
+                {% csrf_token %}
+                <button type="submit" class="button primary">Провести инвентаризацию</button>
+            </form>
+        {% endif %}
+    </div>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <h3>Параметры</h3>
+        <dl class="meta-list">
+            <div><dt>Склад</dt><dd>{{ inventory.warehouse.name }}</dd></div>
+            <div><dt>Охват</dt><dd>{{ inventory.get_scope_display }}</dd></div>
+            <div><dt>Статус</dt><dd>{{ inventory.get_status_display }}</dd></div>
+            <div><dt>Комментарий</dt><dd>{{ inventory.comment|default:"-" }}</dd></div>
+            <div><dt>Автокорректировка</dt><dd>{% if adjustment %}<a class="data-link" href="{% url 'document_detail' adjustment.pk %}">{{ adjustment.number }}</a>{% else %}-{% endif %}</dd></div>
+        </dl>
+    </article>
+    <article class="card">
+        <h3>Строки</h3>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Артикул</th>
+                        <th>Номенклатура</th>
+                        <th>Учет</th>
+                        <th>Факт</th>
+                        <th>Отклонение</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line in inventory.lines.all %}
+                        <tr>
+                            <td>{{ line.item.sku }}</td>
+                            <td>{{ line.item.name }}</td>
+                            <td>{{ line.expected_quantity|quantity:line.item.unit.display_precision }} {{ line.item.unit.code }}</td>
+                            <td>{{ line.actual_quantity|quantity:line.item.unit.display_precision }} {{ line.item.unit.code }}</td>
+                            <td class="{% if line.variance > 0 %}variance-positive{% elif line.variance < 0 %}variance-negative{% else %}variance-neutral{% endif %}">{{ line.variance|quantity:line.item.unit.display_precision }} {{ line.item.unit.code }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="empty-state">Строки не заполнены.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+{% endblock %}

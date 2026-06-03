@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Единицы измерения{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Справочник</span>
+        <h2>Единицы измерения</h2>
+        <p>Единицы задают формат отображения количества в документах, остатках и Excel-выгрузках.</p>
+    </div>
+    <a class="button" href="{% url 'setup' %}">Назад к настройке</a>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <h3>Добавить единицу</h3>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <button type="submit" class="button primary">Добавить</button>
+        </form>
+    </article>
+    <article class="card">
+        <div class="section-head">
+            <h3>Список</h3>
+            <form method="get" class="inline-filters" data-enhanced-filters="1">
+                <input type="search" name="q" value="{{ query }}" placeholder="Поиск по коду или названию" class="search-input">
+                <select name="page_size" data-submit-on="change">
+                    {% for option in page_size_options %}
+                        <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button">Найти</button>
+            </form>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Код</th>
+                        <th>Наименование</th>
+                        <th>Точность</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for unit in units %}
+                        <tr>
+                            <td>{{ unit.code }}</td>
+                            <td>{{ unit.name }}</td>
+                            <td>{{ unit.display_precision }}</td>
+                            <td><a class="data-link" href="{% url 'unit_update' unit.pk %}">Изменить</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="empty-state">
+                                <div class="empty-state-block">
+                                    <strong>Справочник единиц пока пуст.</strong>
+                                    <span>Добавьте первую единицу через форму слева, чтобы задавать формат количества в документах и отчетах.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "warehouse_app/includes/pagination.html" %}
+    </article>
+</section>
+{% endblock %}

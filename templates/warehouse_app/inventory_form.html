@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Инвентаризация</span>
+        <h2>{{ title }}</h2>
+        {% if opening_mode %}
+            <p>Режим первичного запуска: полная фиксация текущего фактического состояния склада.</p>
+        {% else %}
+            <p>После проведения система автоматически создаст документ корректировки по разнице между учетным и фактическим количеством.</p>
+        {% endif %}
+    </div>
+</section>
+
+<form method="post" class="stack-layout">
+    {% csrf_token %}
+    <section class="card form-card">
+        <div class="form-grid">
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-head">
+            <h3>Фактические остатки</h3>
+            <span class="muted">Пустые строки можно не заполнять.</span>
+        </div>
+        {{ formset.management_form }}
+        {{ formset.non_form_errors }}
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Номенклатура</th>
+                        <th>Факт</th>
+                        <th>Комментарий</th>
+                        <th>Удалить</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for line_form in formset %}
+                        <tr>
+                            <td>{{ line_form.item }}{{ line_form.item.errors }}</td>
+                            <td>{{ line_form.actual_quantity }}{{ line_form.actual_quantity.errors }}</td>
+                            <td>{{ line_form.comment }}{{ line_form.comment.errors }}</td>
+                            <td>{{ line_form.DELETE }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="actions">
+        <button type="submit" class="button primary">Сохранить черновик</button>
+        <a class="button" href="{{ back_url|default_if_none:''|default:request.path }}">Отмена</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Номенклатура{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Справочник</span>
+        <h2>Номенклатура</h2>
+        <p>Справочник позиций, используемых в документах движения, инвентаризациях и отчетности.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'export_items' %}">Выгрузить Excel</a>
+    </div>
+</section>
+
+<section class="two-column wide-left">
+    <article class="card">
+        <h3>Добавить позицию</h3>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <button type="submit" class="button primary">Добавить</button>
+        </form>
+    </article>
+    <article class="card">
+        <div class="section-head">
+            <h3>Список номенклатуры</h3>
+            <form method="get" class="inline-filters" data-enhanced-filters="1">
+                <input type="search" name="q" value="{{ query }}" placeholder="Поиск по артикулу или названию" class="search-input">
+                <select name="page_size" data-submit-on="change">
+                    {% for option in page_size_options %}
+                        <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button">Найти</button>
+            </form>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Артикул</th>
+                        <th>Наименование</th>
+                        <th>Ед.</th>
+                        <th>Статус</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                        <tr>
+                            <td>{{ item.sku }}</td>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.unit.code }}</td>
+                            <td>{{ item.is_active|yesno:"Активна,Отключена" }}</td>
+                            <td><a class="data-link" href="{% url 'item_update' item.pk %}">Изменить</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                <div class="empty-state-block">
+                                    <strong>Номенклатура пока не заполнена.</strong>
+                                    <span>Добавьте первую позицию через форму слева или загрузите демо-данные для быстрого показа.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "warehouse_app/includes/pagination.html" %}
+    </article>
+</section>
+{% endblock %}

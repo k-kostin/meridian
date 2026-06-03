@@ -1,0 +1,236 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Warehouse Control{% endblock %}</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="{% static 'warehouse_app/styles.css' %}">
+</head>
+<body>
+    <div class="shell">
+        <aside class="sidebar">
+            <a href="{% url 'dashboard' %}" class="brand">
+                <span class="brand-kicker">Warehouse</span>
+                <h1>Control Desk</h1>
+                <p>Остатки, движения, инвентаризации и Excel-выгрузка.</p>
+            </a>
+            <nav class="nav">
+                <div class="nav-group">
+                    <span class="nav-group-title">Обзор</span>
+                    <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Панель</a>
+                    <a href="{% url 'setup' %}" class="{% if request.resolver_match.url_name == 'setup' %}active{% endif %}">Первичная настройка</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-title">Справочники</span>
+                    <a href="{% url 'unit_list' %}" class="{% if request.resolver_match.url_name == 'unit_list' or request.resolver_match.url_name == 'unit_update' %}active{% endif %}">Единицы</a>
+                    <a href="{% url 'warehouse_list' %}" class="{% if request.resolver_match.url_name == 'warehouse_list' or request.resolver_match.url_name == 'warehouse_update' %}active{% endif %}">Склады</a>
+                    <a href="{% url 'item_list' %}" class="{% if request.resolver_match.url_name == 'item_list' or request.resolver_match.url_name == 'item_update' %}active{% endif %}">Номенклатура</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-title">Документы</span>
+                    <a href="{% url 'document_list' %}" class="{% if request.resolver_match.url_name == 'document_list' or request.resolver_match.url_name == 'document_create' or request.resolver_match.url_name == 'document_detail' %}active{% endif %}">Документы движения</a>
+                    <a href="{% url 'inventory_list' %}" class="{% if request.resolver_match.url_name == 'inventory_list' or request.resolver_match.url_name == 'inventory_create' or request.resolver_match.url_name == 'inventory_detail' %}active{% endif %}">Инвентаризации</a>
+                </div>
+                <div class="nav-group">
+                    <span class="nav-group-title">Отчеты</span>
+                    <a href="{% url 'balance_report' %}" class="{% if request.resolver_match.url_name == 'balance_report' %}active{% endif %}">Текущие остатки</a>
+                    <a href="{% url 'daily_ledger_report' %}" class="{% if request.resolver_match.url_name == 'daily_ledger_report' %}active{% endif %}">Подневный отчет</a>
+                    <a href="{% url 'monthly_ledger_report' %}" class="{% if request.resolver_match.url_name == 'monthly_ledger_report' %}active{% endif %}">Помесячный отчет</a>
+                    <a href="{% url 'analytics_report' %}" class="{% if request.resolver_match.url_name == 'analytics_report' %}active{% endif %}">Аналитика периода</a>
+                </div>
+            </nav>
+        </aside>
+        <main class="content">
+            {% if app_demo_mode %}
+                <div class="demo-banner">
+                    <div>
+                        <strong>Демо-режим активен.</strong>
+                        {% if app_has_core_data %}
+                            <span>В базе уже есть данные. Можно перезагрузить демо-набор и заново развернуть демонстрационные данные.</span>
+                        {% else %}
+                            <span>База пуста. Можно загрузить демонстрационный набор данных.</span>
+                        {% endif %}
+                        {% if app_has_core_data %}
+                            <small>Перезагрузка заменит текущие данные в этой демонстрационной базе.</small>
+                        {% endif %}
+                    </div>
+                    <form method="post" action="{% url 'demo_load' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                        <button type="submit" class="button primary" {% if app_has_core_data %}onclick="return confirm('Перезагрузить демо-набор? Текущие данные демонстрационной базы будут удалены.');"{% endif %}>
+                            {% if app_has_core_data %}Перезагрузить демо-данные{% else %}Загрузить демо-данные{% endif %}
+                        </button>
+                    </form>
+                </div>
+            {% endif %}
+            {% if messages %}
+                <div class="messages">
+                    {% for message in messages %}
+                        <div class="message {{ message.tags }}" {% if "error" not in message.tags %}data-autodismiss="1"{% endif %}>{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    <script>
+        (function () {
+            const submitForm = (form) => {
+                if (!form) {
+                    return;
+                }
+                if (form.requestSubmit) {
+                    form.requestSubmit();
+                    return;
+                }
+                form.submit();
+            };
+
+            document.querySelectorAll("form[data-live-region]").forEach((form) => {
+                const regionSelector = form.dataset.liveRegion;
+                const region = document.querySelector(regionSelector);
+                if (!region) {
+                    return;
+                }
+
+                const exportLink = form.dataset.liveExport ? document.querySelector(form.dataset.liveExport) : null;
+                let fetchTimer;
+                let activeRequest;
+
+                const buildUrl = (overrideUrl) => {
+                    if (overrideUrl) {
+                        return overrideUrl;
+                    }
+                    const url = new URL(form.action || window.location.pathname, window.location.origin);
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams();
+                    formData.forEach((value, key) => {
+                        if (value !== "") {
+                            params.set(key, value);
+                        }
+                    });
+                    url.search = params.toString();
+                    return url.toString();
+                };
+
+                const updateExportLink = (url) => {
+                    if (!exportLink) {
+                        return;
+                    }
+                    const liveUrl = new URL(url, window.location.origin);
+                    exportLink.href = "{% url 'export_balances' %}" + (liveUrl.search ? liveUrl.search : "");
+                };
+
+                const applyResponse = (html, url) => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, "text/html");
+                    const nextRegion = doc.querySelector(regionSelector);
+                    if (!nextRegion) {
+                        return;
+                    }
+                    region.innerHTML = nextRegion.innerHTML;
+                    updateExportLink(url);
+                    window.history.replaceState({}, "", url);
+                };
+
+                const fetchRegion = (overrideUrl) => {
+                    const url = buildUrl(overrideUrl);
+                    window.clearTimeout(fetchTimer);
+                    if (activeRequest) {
+                        activeRequest.abort();
+                    }
+                    activeRequest = new AbortController();
+                    fetch(url, {
+                        headers: {"X-Requested-With": "XMLHttpRequest"},
+                        signal: activeRequest.signal,
+                    })
+                        .then((response) => response.text())
+                        .then((html) => applyResponse(html, url))
+                        .catch((error) => {
+                            if (error.name !== "AbortError") {
+                                window.location.assign(url);
+                            }
+                        })
+                        .finally(() => {
+                            activeRequest = null;
+                        });
+                };
+
+                form.querySelectorAll("[data-live-search='1']").forEach((control) => {
+                    const delay = Number(control.dataset.liveDelay || 260);
+                    const scheduleFetch = () => {
+                        window.clearTimeout(fetchTimer);
+                        fetchTimer = window.setTimeout(() => fetchRegion(), delay);
+                    };
+                    control.addEventListener("input", scheduleFetch);
+                    control.addEventListener("search", scheduleFetch);
+                });
+
+                form.querySelectorAll("[data-live-change='1']").forEach((control) => {
+                    control.addEventListener("change", () => fetchRegion());
+                });
+
+                region.addEventListener("click", (event) => {
+                    const link = event.target.closest("a");
+                    if (!link || !region.contains(link)) {
+                        return;
+                    }
+                    event.preventDefault();
+                    fetchRegion(link.href);
+                });
+            });
+
+            document.querySelectorAll("form[data-enhanced-filters='1']").forEach((form) => {
+                form.querySelectorAll("[data-submit-on='input']").forEach((control) => {
+                    let timerId;
+                    const delay = Number(control.dataset.submitDelay || 300);
+                    const scheduleSubmit = () => {
+                        window.clearTimeout(timerId);
+                        timerId = window.setTimeout(() => submitForm(form), delay);
+                    };
+                    control.addEventListener("input", scheduleSubmit);
+                    control.addEventListener("search", scheduleSubmit);
+                });
+
+                form.querySelectorAll("[data-submit-on='change']").forEach((control) => {
+                    control.addEventListener("change", () => submitForm(form));
+                });
+
+                form.querySelectorAll("input[type='search']").forEach((control) => {
+                    if (control.dataset.submitOn === "input") {
+                        return;
+                    }
+                    let previousValue = control.value;
+                    const syncValue = () => {
+                        const currentValue = control.value;
+                        const justCleared = previousValue !== "" && currentValue === "";
+                        previousValue = currentValue;
+                        if (justCleared) {
+                            submitForm(form);
+                        }
+                    };
+                    control.addEventListener("input", syncValue);
+                    control.addEventListener("search", syncValue);
+                });
+            });
+
+            document.querySelectorAll("input[data-autoblur-date='1']").forEach((input) => {
+                const blurInput = () => {
+                    window.requestAnimationFrame(() => input.blur());
+                };
+                input.addEventListener("input", blurInput);
+                input.addEventListener("change", blurInput);
+            });
+
+            document.querySelectorAll("[data-autodismiss='1']").forEach((message) => {
+                window.setTimeout(() => {
+                    message.classList.add("message-fading");
+                    window.setTimeout(() => message.remove(), 240);
+                }, 5000);
+            });
+        })();
+    </script>
+</body>
+</html>

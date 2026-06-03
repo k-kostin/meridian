@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}Панель управления{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <div>
+        <span class="eyebrow">Обзор</span>
+        <h2>Складской учет для малого предприятия</h2>
+        <p>Остатки по складу, документы движения, инвентаризации и выгрузка в Excel.</p>
+    </div>
+    <div class="hero-actions">
+        {% if setup_ready %}
+            <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+            {% if has_posted_activity %}
+                <a class="button" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+            {% else %}
+                <a class="button" href="{% url 'inventory_create' %}?opening=1">Стартовая инвентаризация</a>
+            {% endif %}
+        {% else %}
+            <a class="button primary" href="{% url 'setup' %}">Первичная настройка</a>
+        {% endif %}
+    </div>
+</section>
+
+<section class="stats-grid">
+    <article class="card stat">
+        <span>Номенклатура</span>
+        <strong>{{ items_count }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Склады</span>
+        <strong>{{ warehouses_count }}</strong>
+    </article>
+    <a class="card stat stat-link" href="{% url 'document_list' %}?status=draft">
+        <span>Черновики документов</span>
+        <strong>{{ draft_documents_count }}</strong>
+    </a>
+    <a class="card stat stat-link" href="{% url 'inventory_list' %}?status=draft">
+        <span>Черновики инвентаризаций</span>
+        <strong>{{ draft_inventories_count }}</strong>
+    </a>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <div class="section-head">
+            <h3>Текущие остатки</h3>
+            <a href="{% url 'balance_report' %}">Открыть полный отчет</a>
+        </div>
+        {% if balances %}
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Склад</th>
+                        <th>Артикул</th>
+                        <th>Номенклатура</th>
+                        <th>Остаток</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in balances %}
+                        <tr>
+                            <td>{{ row.warehouse_label }}</td>
+                            <td>{{ row.item__sku }}</td>
+                            <td>{{ row.item__name }}</td>
+                            <td>{{ row.quantity|quantity:row.item__unit__display_precision }} {{ row.item__unit__code }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="empty-state">Пока нет проведенных документов, поэтому остатки пусты.</p>
+        {% endif %}
+    </article>
+
+    <article class="card">
+        <div class="section-head">
+            <h3>Последние документы</h3>
+            <a href="{% url 'document_list' %}">Все документы</a>
+        </div>
+        {% if recent_documents %}
+            <ul class="activity-list">
+                {% for document in recent_documents %}
+                    <li>
+                        <a href="{% url 'document_detail' document.pk %}">{{ document.number }}</a>
+                        <span>{{ document.get_document_type_display }} · {{ document.warehouse.name }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p class="empty-state">Документы еще не создавались.</p>
+        {% endif %}
+        <div class="callout">
+            {% if setup_ready %}
+                <h4>Контур готов к работе</h4>
+                <p>Можно заводить приход, расход и регулярные инвентаризации.</p>
+            {% else %}
+                <h4>Нужна первичная настройка</h4>
+                <p>Сначала создайте единицы измерения, склад и номенклатуру, затем внесите стартовые остатки через инвентаризацию.</p>
+                <a class="button" href="{% url 'setup' %}">Открыть мастер настройки</a>
+            {% endif %}
+        </div>
+    </article>
+</section>
+{% endblock %}

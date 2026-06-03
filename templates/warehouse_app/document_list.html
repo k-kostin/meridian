@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Документы движения{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Документы</span>
+        <h2>Документы движения</h2>
+        <p>Журнал документов с фильтрацией по складу, типу, статусу и диапазону дат.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+        <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
+        <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
+        <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
+        <a class="button" href="{% url 'export_movements' %}{% if movements_query_string %}?{{ movements_query_string }}{% endif %}">Выгрузить Excel</a>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" class="inline-filters" data-enhanced-filters="1">
+        <input type="search" name="q" value="{{ query }}" placeholder="Номер, склад, комментарий или номенклатура" class="search-input">
+        <input type="date" name="date_from" value="{{ selected_date_from }}" class="date-input" data-autoblur-date="1">
+        <input type="date" name="date_to" value="{{ selected_date_to }}" class="date-input" data-autoblur-date="1">
+        <select name="warehouse">
+            <option value="">Все склады</option>
+            {% for warehouse in warehouses %}
+                <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="document_type">
+            <option value="">Все типы</option>
+            {% for value, label in document_types %}
+                <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="status">
+            <option value="">Все статусы</option>
+            {% for value, label in statuses %}
+                <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+        <select name="page_size" data-submit-on="change">
+            {% for option in page_size_options %}
+                <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="button">Применить</button>
+    </form>
+</section>
+
+<section class="card">
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Дата</th>
+                    <th>Номер</th>
+                    <th>Тип</th>
+                    <th>Склад</th>
+                    <th>Строк</th>
+                    <th>Статус</th>
+                </tr>
+            </thead>
+                <tbody>
+                    {% for document in documents %}
+                        <tr>
+                        <td>{{ document.operation_date|date:"d.m.Y" }}</td>
+                        <td><a class="data-link" href="{% url 'document_detail' document.pk %}">{{ document.number }}</a></td>
+                        <td>
+                            <span class="doc-type-badge doc-type-{{ document.document_type }}">
+                                {{ document.get_document_type_display }}
+                            </span>
+                        </td>
+                        <td>{{ document.warehouse.name }}</td>
+                        <td>{{ document.lines_count }}</td>
+                        <td>{{ document.get_status_display }}</td>
+                    </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="6" class="empty-state">
+                                <div class="empty-state-block">
+                                    <strong>Документы движения пока не созданы.</strong>
+                                    <span>Начните с нового прихода, расхода или корректировки из кнопок над журналом.</span>
+                                    <div class="empty-state-actions">
+                                        <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+                                        <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
+                                        <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
+                                        <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+    </div>
+    {% include "warehouse_app/includes/pagination.html" %}
+</section>
+{% endblock %}

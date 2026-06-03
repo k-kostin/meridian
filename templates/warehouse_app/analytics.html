@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}Аналитика периода{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Аналитика</span>
+        <h2>Состояние склада на дату и за период</h2>
+        <p>Для дня отчет показывает остаток на начало дня, движения за день и состояние на конец дня. Для месяца, года и произвольного периода показываются начало, конец и дельта.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'export_analysis' %}{% if query_string %}?{{ query_string }}{% endif %}">Выгрузить Excel</a>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" class="analytics-form">
+        <div class="form-grid analytics-filter-grid">
+            <div class="field">
+                <label for="id_warehouse">Склад</label>
+                <select id="id_warehouse" name="warehouse">
+                    <option value="">Все склады</option>
+                    {% for warehouse in warehouses %}
+                        <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
+                <label for="id_mode">Режим</label>
+                <select id="id_mode" name="mode">
+                    <option value="day" {% if selected_mode == "day" %}selected{% endif %}>День</option>
+                    <option value="month" {% if selected_mode == "month" %}selected{% endif %}>Месяц</option>
+                    <option value="year" {% if selected_mode == "year" %}selected{% endif %}>Год</option>
+                    <option value="custom" {% if selected_mode == "custom" %}selected{% endif %}>Период</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="id_presentation">Представление</label>
+                <select id="id_presentation" name="presentation">
+                    <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
+                    <option value="by_warehouse" {% if selected_presentation == "by_warehouse" %}selected{% endif %}>По складам</option>
+                </select>
+            </div>
+            <div class="field mode-anchor-field {% if selected_mode == 'custom' %}hidden-field{% endif %}">
+                <label for="id_anchor_date">Опорная дата</label>
+                <input id="id_anchor_date" class="date-input" type="date" name="anchor_date" value="{{ selected_anchor_date }}" data-autoblur-date="1">
+            </div>
+            <div class="custom-date-stack mode-custom-field {% if selected_mode != 'custom' %}hidden-field{% endif %}">
+                <div class="field">
+                    <label for="id_date_from">Дата начала периода</label>
+                    <input id="id_date_from" class="date-input" type="date" name="date_from" value="{{ selected_date_from }}" data-autoblur-date="1">
+                </div>
+                <div class="field">
+                    <label for="id_date_to">Дата конца периода</label>
+                    <input id="id_date_to" class="date-input" type="date" name="date_to" value="{{ selected_date_to }}" data-autoblur-date="1">
+                </div>
+            </div>
+        </div>
+        <div class="actions">
+            <button type="submit" class="button primary">Построить отчет</button>
+        </div>
+    </form>
+    <p class="muted">Для режимов День, Месяц и Год используется опорная дата. Поля начала и конца периода применяются только в режиме Период. Режим “Сводно” суммирует показатели по выбранным складам, а “По складам” показывает отдельную строку по каждому складу и позиции.</p>
+</section>
+
+<section class="stats-grid analytics-stats">
+    <article class="card stat">
+        <span>{{ period.label }}</span>
+        <strong>{{ period.start|date:"d.m.Y" }}{% if not period.is_single_day %} → {{ period.end|date:"d.m.Y" }}{% endif %}</strong>
+    </article>
+    <article class="card stat">
+        <span>Представление</span>
+        <strong>{{ report.presentation_label }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Строк в отчете</span>
+        <strong>{{ report.summary.rows_count }}</strong>
+    </article>
+    <article class="card stat">
+        <span>Документов в периоде</span>
+        <strong>{{ report.summary.documents_count }}</strong>
+    </article>
+</section>
+
+<section class="card">
+    <div class="section-head">
+        <h3>Показатели периода</h3>
+        <span class="muted">Строк движений: {{ report.summary.lines_count }} · Ненулевых позиций на начало: {{ report.summary.opening_positions_count }} · на конец: {{ report.summary.closing_positions_count }}</span>
+    </div>
+    <div class="table-wrap">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    {% if selected_presentation == "by_warehouse" %}
+                        <th>Склад</th>
+                    {% endif %}
+                    <th>Артикул</th>
+                    <th>Номенклатура</th>
+                    <th>Ед.</th>
+                    <th>На начало</th>
+                    <th>Приход</th>
+                    <th>Расход</th>
+                    <th>Дельта</th>
+                    <th>На конец</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if selected_presentation == "by_warehouse" %}
+                    {% for group in report.grouped_rows %}
+                        {% for row in group.rows %}
+                            <tr>
+                                <td>{{ row.warehouse_label }}</td>
+                                <td>{{ row.sku }}</td>
+                                <td>{{ row.name }}</td>
+                                <td>{{ row.unit }}</td>
+                                <td>{{ row.opening|quantity:row.unit_precision }}</td>
+                                <td>{{ row.incoming|quantity:row.unit_precision }}</td>
+                                <td>{{ row.outgoing|quantity:row.unit_precision }}</td>
+                                <td>{{ row.net|quantity:row.unit_precision }}</td>
+                                <td>{{ row.closing|quantity:row.unit_precision }}</td>
+                            </tr>
+                        {% endfor %}
+                        {% for st in group.subtotals_by_unit %}
+                        <tr class="subtotal-row">
+                            <td colspan="3">{% if forloop.first %}Итого: {{ group.warehouse_label }}{% endif %}</td>
+                            <td>{{ st.unit }}</td>
+                            <td>{{ st.opening|quantity:st.unit_precision }}</td>
+                            <td>{{ st.incoming|quantity:st.unit_precision }}</td>
+                            <td>{{ st.outgoing|quantity:st.unit_precision }}</td>
+                            <td>{{ st.net|quantity:st.unit_precision }}</td>
+                            <td>{{ st.closing|quantity:st.unit_precision }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% empty %}
+                        <tr>
+                            <td colspan="9" class="empty-state">За выбранный период данных нет.</td>
+                        </tr>
+                    {% endfor %}
+                    {% if report.rows %}
+                        {% for gt in report.grand_total_by_unit %}
+                        <tr class="total-row">
+                            <td colspan="3">{% if forloop.first %}Итого по всем складам{% endif %}</td>
+                            <td>{{ gt.unit }}</td>
+                            <td>{{ gt.opening|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.incoming|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.outgoing|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.net|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.closing|quantity:gt.unit_precision }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                {% else %}
+                    {% for row in report.rows %}
+                        <tr>
+                            <td>{{ row.sku }}</td>
+                            <td>{{ row.name }}</td>
+                            <td>{{ row.unit }}</td>
+                            <td>{{ row.opening|quantity:row.unit_precision }}</td>
+                            <td>{{ row.incoming|quantity:row.unit_precision }}</td>
+                            <td>{{ row.outgoing|quantity:row.unit_precision }}</td>
+                            <td>{{ row.net|quantity:row.unit_precision }}</td>
+                            <td>{{ row.closing|quantity:row.unit_precision }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="8" class="empty-state">За выбранный период данных нет.</td>
+                        </tr>
+                    {% endfor %}
+                    {% if report.rows %}
+                        {% for gt in report.grand_total_by_unit %}
+                        <tr class="total-row">
+                            <td colspan="2">{% if forloop.first %}Итого{% endif %}</td>
+                            <td>{{ gt.unit }}</td>
+                            <td>{{ gt.opening|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.incoming|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.outgoing|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.net|quantity:gt.unit_precision }}</td>
+                            <td>{{ gt.closing|quantity:gt.unit_precision }}</td>
+                        </tr>
+                        {% endfor %}
+                    {% endif %}
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</section>
+<script>
+    (function () {
+        const modeSelect = document.getElementById("id_mode");
+        if (!modeSelect) {
+            return;
+        }
+        const toggleFields = () => {
+            const isCustom = modeSelect.value === "custom";
+            document.querySelectorAll(".mode-anchor-field").forEach((node) => {
+                node.classList.toggle("hidden-field", isCustom);
+            });
+            document.querySelectorAll(".mode-custom-field").forEach((node) => {
+                node.classList.toggle("hidden-field", !isCustom);
+            });
+        };
+        modeSelect.addEventListener("change", toggleFields);
+        toggleFields();
+    })();
+</script>
+{% endblock %}

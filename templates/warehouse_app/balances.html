@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load warehouse_tags %}
+
+{% block title %}Текущие остатки{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Остатки</span>
+        <h2>Текущие остатки</h2>
+        <p>Текущая картина по остаткам, накопленному приходу и расходу с возможностью быстро найти нужную позицию.</p>
+    </div>
+    <div class="page-actions">
+        <a id="balances-export-link" class="button" href="{% url 'export_balances' %}{% if pagination_query %}?{{ pagination_query }}{% endif %}">Выгрузить Excel</a>
+    </div>
+</section>
+
+<section class="card">
+    <form method="get" class="inline-filters" data-live-region="#balance-results" data-live-export="#balances-export-link">
+        <input
+            type="search"
+            name="q"
+            value="{{ query }}"
+            placeholder="Поиск по артикулу, названию или складу"
+            class="search-input"
+            data-live-search="1"
+            data-live-delay="260"
+        >
+        <select name="warehouse">
+            <option value="">Все склады</option>
+            {% for warehouse in warehouses %}
+                <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
+            {% endfor %}
+        </select>
+        <select name="presentation" data-live-change="1">
+            <option value="by_warehouse" {% if selected_presentation == "by_warehouse" %}selected{% endif %}>По складам</option>
+            <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
+        </select>
+        <label class="checkbox-chip">
+            <input type="checkbox" name="include_zero" value="1" {% if selected_include_zero %}checked{% endif %} data-live-change="1">
+            <span>Показывать нулевые позиции</span>
+        </label>
+        <select name="page_size" data-live-change="1">
+            {% for option in page_size_options %}
+                <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="button">Применить</button>
+    </form>
+    <p class="muted">Режим “Сводно” суммирует остатки по выбранным складам. Режим “По складам” показывает отдельную строку по каждому складу. При необходимости можно включить нулевые позиции, чтобы видеть весь справочник.</p>
+</section>
+
+<section class="card">
+    <div id="balance-results">
+        {% include "warehouse_app/includes/balance_results.html" %}
+    </div>
+</section>
+{% endblock %}

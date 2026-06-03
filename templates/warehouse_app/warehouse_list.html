@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Склады{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Справочник</span>
+        <h2>Склады</h2>
+        <p>Справочник складов, участвующих в документах движения, инвентаризациях и аналитике.</p>
+    </div>
+    <a class="button" href="{% url 'setup' %}">Назад к настройке</a>
+</section>
+
+<section class="two-column">
+    <article class="card">
+        <h3>Добавить склад</h3>
+        <form method="post" class="stack-form">
+            {% csrf_token %}
+            {% for field in form %}
+                <div class="field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {{ field.errors }}
+                </div>
+            {% endfor %}
+            <button type="submit" class="button primary">Добавить</button>
+        </form>
+    </article>
+    <article class="card">
+        <div class="section-head">
+            <h3>Список складов</h3>
+            <form method="get" class="inline-filters" data-enhanced-filters="1">
+                <input type="search" name="q" value="{{ query }}" placeholder="Поиск по коду или названию" class="search-input">
+                <select name="page_size" data-submit-on="change">
+                    {% for option in page_size_options %}
+                        <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" class="button">Найти</button>
+            </form>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Код</th>
+                        <th>Наименование</th>
+                        <th>Статус</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for warehouse in warehouses %}
+                        <tr>
+                            <td>{{ warehouse.code }}</td>
+                            <td>{{ warehouse.name }}</td>
+                            <td>{{ warehouse.is_active|yesno:"Активен,Отключен" }}</td>
+                            <td><a class="data-link" href="{% url 'warehouse_update' warehouse.pk %}">Изменить</a></td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="4" class="empty-state">Список пуст.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "warehouse_app/includes/pagination.html" %}
+    </article>
+</section>
+{% endblock %}
