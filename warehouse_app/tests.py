@@ -8,6 +8,8 @@ from openpyxl import load_workbook
 
 from .demo import seed_demo_data
 from .models import (
+    ActivityEvent,
+    ActivityEventType,
     DocumentStatus,
     InventoryDocument,
     InventoryLine,
@@ -156,6 +158,67 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(document.status, DocumentStatus.POSTED)
         self.assertEqual(document.posted_at, first_posted_at)
+
+    def test_posting_stock_document_records_activity_event_once(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 11),
+            comment="timeline receipt",
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("5"))
+
+        document.post()
+        document.post()
+
+        events = ActivityEvent.objects.filter(stock_document=document)
+        self.assertEqual(events.count(), 1)
+        event = events.get()
+        self.assertEqual(event.event_type, ActivityEventType.STOCK_DOCUMENT_POSTED)
+        self.assertEqual(event.warehouse, self.warehouse)
+        self.assertEqual(event.inventory_document, None)
+        self.assertIn(document.number, event.message)
+        self.assertIn("Приход", event.message)
+
+    def test_posting_inventory_records_inventory_and_adjustment_activity(self):
+        self._receipt(self.item, "10")
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 3, 12),
+            scope=InventoryScope.PARTIAL,
+            comment="timeline inventory",
+        )
+        InventoryLine.objects.create(
+            inventory=inventory,
+            item=self.item,
+            actual_quantity=Decimal("7"),
+        )
+
+        inventory.post()
+        inventory.post()
+
+        adjustment = inventory.generated_documents.get()
+        inventory_events = ActivityEvent.objects.filter(
+            inventory_document=inventory,
+            event_type__in=[
+                ActivityEventType.INVENTORY_POSTED,
+                ActivityEventType.INVENTORY_ADJUSTMENT_CREATED,
+            ],
+        )
+
+        self.assertEqual(
+            set(inventory_events.values_list("event_type", flat=True)),
+            {
+                ActivityEventType.INVENTORY_POSTED,
+                ActivityEventType.INVENTORY_ADJUSTMENT_CREATED,
+            },
+        )
+        self.assertEqual(inventory_events.count(), 2)
+        adjustment_posted_event = ActivityEvent.objects.get(
+            stock_document=adjustment,
+            event_type=ActivityEventType.STOCK_DOCUMENT_POSTED,
+        )
+        self.assertEqual(adjustment_posted_event.inventory_document, inventory)
 
     def test_document_numbers_increment_for_same_day(self):
         first = StockDocument.objects.create(
@@ -1030,6 +1093,35 @@ class WarehouseFlowTests(TestCase):
             'onsubmit="return confirm(\'Провести инвентаризацию? После проведения документ нельзя изменить.\');"',
             html=False,
         )
+
+    def test_document_detail_shows_activity_timeline_after_posting(self):
+        document = self._receipt(self.item, "10")
+
+        response = self.client.get(f"/documents/{document.pk}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "История")
+        self.assertContains(response, f"Документ {document.number} проведен")
+        self.assertContains(response, "Приход")
+
+    def test_inventory_detail_shows_activity_timeline_after_posting(self):
+        self._receipt(self.item, "10")
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 3, 13),
+            scope=InventoryScope.PARTIAL,
+        )
+        InventoryLine.objects.create(inventory=inventory, item=self.item, actual_quantity=Decimal("8"))
+
+        inventory.post()
+        adjustment = inventory.generated_documents.get()
+
+        response = self.client.get(f"/inventories/{inventory.pk}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "История")
+        self.assertContains(response, f"Инвентаризация {inventory.number} проведена")
+        self.assertContains(response, f"Создана автокорректировка {adjustment.number}")
 
     def test_document_list_has_entry_points_for_all_document_types_and_badges(self):
         receipt = StockDocument.objects.create(
