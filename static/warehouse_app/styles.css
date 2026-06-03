@@ -65,6 +65,13 @@ a {
     color: rgba(242, 237, 230, 0.72);
 }
 
+.app-version {
+    display: inline-block;
+    margin-top: 8px;
+    color: rgba(242, 237, 230, 0.56);
+    font-weight: 650;
+}
+
 .brand-kicker,
 .eyebrow {
     letter-spacing: 0.12em;

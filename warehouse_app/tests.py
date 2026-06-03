@@ -1284,6 +1284,12 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "Отчеты")
         self.assertContains(response, 'class="nav-group-title"', html=False)
 
+    def test_dashboard_exposes_application_version(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "v0.2.0")
+
     def test_brand_links_to_dashboard_and_empty_states_suggest_next_action(self):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
