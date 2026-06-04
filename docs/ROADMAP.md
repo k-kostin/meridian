@@ -9,6 +9,13 @@
 - Текущий рабочий MVP зафиксирован как `v0.1 MVP Baseline` в `docs/releases/v0.1-mvp-baseline.md`.
 - Новая функциональность начинается с `v0.2`; первый foundation slice фиксирует версионность приложения.
 - Каждая следующая версия должна сохранять do-not-regress список из baseline release note.
+- Версия приложения не повышается на каждый pull request. Patch/slice release notes могут фиксировать отдельные срезы, но UI/package version повышается только на понятных milestone-точках.
+- `v0.2.x` — stabilization/foundation line: версия приложения, операционная история, быстрые фильтры и базовая role-aware UX-модель.
+- `v0.3.0` — Stage A closure milestone: import/onboarding flow, стартовые остатки через инвентаризацию и audit gate закрытого MVP-контура.
+- `v0.4.0` — Stage B operational contour: рабочие web-flow улучшения для повседневной эксплуатации.
+- `v0.5.0` — встроенная аналитика поверх MVP.
+- `v0.6.0` — desktop/GUI packaging milestone.
+- `v1.0.0` стоит резервировать для первого стабильного pilot/production-ready релиза, где установка, поддержка, данные, backup/migration и основные ручные сценарии проверены как обычный пользовательский продукт.
 
 ## 1. Текущее положение
 
