@@ -477,6 +477,54 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "ALIAS-001")
         self.assertNotContains(response, "Единица обязательна")
 
+    def test_item_import_create_only_still_rejects_existing_sku(self):
+        admin = User.objects.create_user(username="create-only-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload([[self.item.sku, "Новое имя", self.unit.code, "да", ""]])
+
+        response = self.client.post("/items/import/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Артикул уже существует")
+
+    def test_item_import_update_mode_updates_existing_item(self):
+        admin = User.objects.create_user(username="update-mode-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload([[self.item.sku, "Обновленное имя", self.unit.code, "нет", "обновлено"]])
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "update_existing", "workbook": workbook},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.name, "Обновленное имя")
+        self.assertFalse(self.item.is_active)
+        self.assertEqual(self.item.notes, "обновлено")
+        self.assertContains(response, "Импорт обновил позиций: 1")
+
+    def test_item_import_update_mode_rejects_new_sku(self):
+        admin = User.objects.create_user(username="update-mode-new-sku-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload([["NEW-SKU", "Новая позиция", self.unit.code, "да", ""]])
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "update_existing", "workbook": workbook},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Артикул не найден для обновления")
+        self.assertFalse(Item.objects.filter(sku="NEW-SKU").exists())
+
     def test_item_import_preview_renders_row_errors(self):
         admin = User.objects.create_user(username="admin-import-errors", password="pass")
         UserProfile.objects.create(user=admin, role=UserRole.ADMIN)

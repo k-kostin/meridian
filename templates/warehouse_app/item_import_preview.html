@@ -26,6 +26,12 @@
                 {% if form.workbook.help_text %}<small>{{ form.workbook.help_text }}</small>{% endif %}
                 {{ form.workbook.errors }}
             </div>
+            <div class="field">
+                <label for="{{ form.import_mode.id_for_label }}">{{ form.import_mode.label }}</label>
+                {{ form.import_mode }}
+                <small>Режим обновления меняет только существующие позиции и не создает новые артикулы.</small>
+                {{ form.import_mode.errors }}
+            </div>
             <button type="submit" name="action" value="preview" class="button primary">Проверить файл</button>
         </form>
     </article>
@@ -46,7 +52,7 @@
                 <dd>Номенклатура или активный лист книги</dd>
             </div>
         </dl>
-        <p class="message">Импорт создает только новые позиции номенклатуры. Остатки и единицы измерения не импортируются.</p>
+        <p class="message">Импорт создает только новые позиции номенклатуры по умолчанию. Отдельный режим обновления меняет существующие артикулы после повторной проверки файла.</p>
     </article>
 </section>
 
@@ -113,7 +119,12 @@
                     <div class="field">
                         <label for="{{ form.workbook.id_for_label }}">Excel-файл для импорта</label>
                         {{ form.workbook }}
-                        <small>Перед импортом файл проверяется повторно. Выберите тот же файл. Существующие артикулы не обновляются.</small>
+                        <small>Перед импортом файл проверяется повторно. Выберите тот же файл.</small>
+                    </div>
+                    <div class="field">
+                        <label for="{{ form.import_mode.id_for_label }}">Режим импорта</label>
+                        {{ form.import_mode }}
+                        <small>Режим обновления меняет только существующие позиции и не создает новые артикулы.</small>
                     </div>
                     <button type="submit" name="action" value="commit" class="button primary">Импортировать валидные строки</button>
                 </form>
