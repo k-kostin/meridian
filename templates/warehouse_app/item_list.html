@@ -10,6 +10,9 @@
         <p>Справочник позиций, используемых в документах движения, инвентаризациях и отчетности.</p>
     </div>
     <div class="page-actions">
+        {% if app_can_manage_references %}
+            <a class="button" href="{% url 'item_import_preview' %}">Предпросмотр импорта</a>
+        {% endif %}
         <a class="button" href="{% url 'export_items' %}">Выгрузить Excel</a>
     </div>
 </section>

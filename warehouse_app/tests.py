@@ -210,6 +210,89 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].is_active, True)
         self.assertEqual(result.errors, [])
 
+    def _import_workbook_upload(self, rows):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Номенклатура"
+        sheet.append(["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
+        for row in rows:
+            sheet.append(row)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        buffer.name = "items.xlsx"
+        return buffer
+
+    def test_item_import_preview_requires_reference_manager(self):
+        viewer = User.objects.create_user(username="viewer-import", password="pass")
+        UserProfile.objects.create(user=viewer, role=UserRole.VIEWER)
+        self.client.force_login(viewer)
+
+        viewer_response = self.client.get("/items/import/")
+
+        self.assertEqual(viewer_response.status_code, 403)
+
+        admin = User.objects.create_user(username="admin-import", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        admin_response = self.client.get("/items/import/")
+
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertContains(admin_response, "Предпросмотр импорта номенклатуры")
+
+    def test_item_import_preview_renders_valid_rows_without_creating_items(self):
+        admin = User.objects.create_user(username="admin-import-preview", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        before_count = Item.objects.count()
+        workbook = self._import_workbook_upload(
+            [["SKU-IMPORT-1", "Импортная позиция", "kg", "да", "строка предпросмотра"]]
+        )
+
+        response = self.client.post("/items/import/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Item.objects.count(), before_count)
+        self.assertContains(response, "SKU-IMPORT-1")
+        self.assertContains(response, "Импортная позиция")
+        self.assertContains(response, "строка предпросмотра")
+        self.assertContains(response, "Изменения в справочник не внесены")
+
+    def test_item_import_preview_renders_row_errors(self):
+        admin = User.objects.create_user(username="admin-import-errors", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload([["", "", "", "нет", "ошибка строки"]])
+
+        response = self.client.post("/items/import/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Ошибки в строках")
+        self.assertContains(response, "Артикул обязателен")
+        self.assertContains(response, "Наименование обязательно")
+        self.assertContains(response, "Единица обязательна")
+        self.assertContains(response, "ошибка строки")
+
+    def test_item_list_shows_import_cta_only_for_managers(self):
+        viewer = User.objects.create_user(username="viewer-import-cta", password="pass")
+        UserProfile.objects.create(user=viewer, role=UserRole.VIEWER)
+        self.client.force_login(viewer)
+
+        viewer_response = self.client.get("/items/")
+
+        self.assertEqual(viewer_response.status_code, 200)
+        self.assertNotContains(viewer_response, "Предпросмотр импорта")
+
+        admin = User.objects.create_user(username="admin-import-cta", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        admin_response = self.client.get("/items/")
+
+        self.assertEqual(admin_response.status_code, 200)
+        self.assertContains(admin_response, "Предпросмотр импорта")
+
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(
             document_type=StockDocumentType.RECEIPT,
