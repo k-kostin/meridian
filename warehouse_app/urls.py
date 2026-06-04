@@ -19,6 +19,7 @@ urlpatterns = [
     path("documents/<int:pk>/", views.document_detail, name="document_detail"),
     path("documents/<int:pk>/post/", views.document_post, name="document_post"),
     path("inventories/", views.inventory_list, name="inventory_list"),
+    path("inventories/import-opening/", views.opening_inventory_import_preview, name="opening_inventory_import_preview"),
     path("inventories/new/", views.inventory_create, name="inventory_create"),
     path("inventories/<int:pk>/edit/", views.inventory_update, name="inventory_update"),
     path("inventories/<int:pk>/", views.inventory_detail, name="inventory_detail"),

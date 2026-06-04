@@ -20,12 +20,22 @@ from .forms import (
     InventoryLineFormSet,
     ItemForm,
     ItemImportPreviewForm,
+    OpeningInventoryImportForm,
     StockDocumentForm,
     StockLineFormSet,
     UnitForm,
     WarehouseForm,
 )
-from .imports import ItemImportResult, commit_items_import, parse_items_import_workbook, validate_items_import_result
+from .imports import (
+    ItemImportResult,
+    OpeningInventoryImportResult,
+    commit_items_import,
+    commit_opening_inventory_import,
+    parse_items_import_workbook,
+    parse_opening_inventory_import_workbook,
+    validate_items_import_result,
+    validate_opening_inventory_import_result,
+)
 from .demo import has_business_data, seed_demo_data
 from .models import (
     DocumentStatus,
@@ -560,6 +570,44 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
         "statuses": DocumentStatus.choices,
     }
     return render(request, "warehouse_app/inventory_list.html", context)
+
+
+@require_stock_operator
+def opening_inventory_import_preview(request: HttpRequest) -> HttpResponse:
+    form = OpeningInventoryImportForm(request.POST or None, request.FILES or None)
+    result = None
+    has_preview = False
+    action = request.POST.get("action", "preview")
+
+    if request.method == "POST" and form.is_valid():
+        try:
+            parsed_result = parse_opening_inventory_import_workbook(form.cleaned_data["workbook"])
+            validation_errors = validate_opening_inventory_import_result(parsed_result)
+            result = OpeningInventoryImportResult(rows=parsed_result.rows, errors=validation_errors)
+            has_preview = True
+            if action == "commit":
+                commit_result = commit_opening_inventory_import(result)
+                result = OpeningInventoryImportResult(rows=result.rows, errors=commit_result.errors)
+                if commit_result.inventory and not commit_result.errors:
+                    messages.success(
+                        request,
+                        f"Создан черновик инвентаризации {commit_result.inventory.number}. "
+                        f"Строк: {commit_result.created_lines_count}.",
+                    )
+                    return redirect("inventory_detail", pk=commit_result.inventory.pk)
+        except Exception:
+            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
+
+    return render(
+        request,
+        "warehouse_app/opening_inventory_import_preview.html",
+        {
+            "form": form,
+            "result": result,
+            "has_preview": has_preview,
+            "can_commit": bool(result and result.rows and not result.errors),
+        },
+    )
 
 
 @require_stock_operator

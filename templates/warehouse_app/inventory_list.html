@@ -11,6 +11,7 @@
     </div>
     <div class="page-actions">
         {% if app_can_operate_stock %}
+            <a class="button" href="{% url 'opening_inventory_import_preview' %}">Импорт стартовых остатков</a>
             <a class="button primary" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
         {% endif %}
         <a class="button" href="{% url 'export_inventories' %}">Выгрузить Excel</a>
