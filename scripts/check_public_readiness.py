@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 from pathlib import Path
@@ -78,12 +79,27 @@ TEXT_SUFFIXES = {
 }
 
 
-def iter_files(root: Path):
-    for path in root.rglob("*"):
-        if ".git" in path.parts:
+def iter_files(root: Path, *, exclude_forbidden: bool = False):
+    for current_root, dirnames, filenames in os.walk(root):
+        current = Path(current_root)
+        relative_parts = current.relative_to(root).parts
+
+        if ".git" in relative_parts:
+            dirnames[:] = []
             continue
-        if path.is_file():
-            yield path
+
+        if exclude_forbidden and any(part in FORBIDDEN_PATH_PARTS for part in relative_parts):
+            dirnames[:] = []
+            continue
+
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if dirname != ".git" and not (exclude_forbidden and dirname in FORBIDDEN_PATH_PARTS)
+        ]
+
+        for filename in filenames:
+            yield current / filename
 
 
 def check_required_files(root: Path) -> list[str]:
@@ -92,18 +108,24 @@ def check_required_files(root: Path) -> list[str]:
 
 def check_forbidden_paths(root: Path) -> list[str]:
     errors = []
+    reported_forbidden = set()
     for path in iter_files(root):
         relative = path.relative_to(root)
         if path.name in FORBIDDEN_FILE_NAMES:
             errors.append(f"forbidden file: {relative}")
-        if any(part in FORBIDDEN_PATH_PARTS for part in relative.parts):
-            errors.append(f"forbidden path: {relative}")
+        for index, part in enumerate(relative.parts):
+            if part in FORBIDDEN_PATH_PARTS:
+                forbidden_path = Path(*relative.parts[: index + 1])
+                if forbidden_path not in reported_forbidden:
+                    reported_forbidden.add(forbidden_path)
+                    errors.append(f"forbidden path: {forbidden_path}")
+                break
     return errors
 
 
 def check_secret_patterns(root: Path) -> list[str]:
     errors = []
-    for path in iter_files(root):
+    for path in iter_files(root, exclude_forbidden=True):
         if path.suffix not in TEXT_SUFFIXES:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore")
@@ -132,7 +154,7 @@ def check_public_readme(root: Path) -> list[str]:
 
 def check_forbidden_public_text(root: Path) -> list[str]:
     errors = []
-    for path in iter_files(root):
+    for path in iter_files(root, exclude_forbidden=True):
         if path.relative_to(root).as_posix() == "scripts/check_public_readiness.py":
             continue
         if path.suffix not in TEXT_SUFFIXES:
