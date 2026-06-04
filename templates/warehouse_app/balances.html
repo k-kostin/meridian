@@ -16,7 +16,16 @@
 </section>
 
 <section class="card">
+    <nav class="quick-filters" aria-label="Быстрые фильтры остатков">
+        <a class="chip{% if selected_preset == 'by_warehouse' %} active{% endif %}" href="?preset=by_warehouse">По складам</a>
+        <a class="chip{% if selected_preset == 'consolidated' %} active{% endif %}" href="?preset=consolidated">Сводно</a>
+        <a class="chip{% if selected_preset == 'with_zero' %} active{% endif %}" href="?preset=with_zero">Все позиции</a>
+        <a class="chip{% if selected_preset == 'nonzero' %} active{% endif %}" href="?preset=nonzero">Только с остатком</a>
+    </nav>
     <form method="get" class="inline-filters" data-live-region="#balance-results" data-live-export="#balances-export-link">
+        {% if selected_preset %}
+            <input type="hidden" name="preset" value="{{ selected_preset }}">
+        {% endif %}
         <input
             type="search"
             name="q"
@@ -37,6 +46,7 @@
             <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
         </select>
         <label class="checkbox-chip">
+            <input type="hidden" name="include_zero" value="">
             <input type="checkbox" name="include_zero" value="1" {% if selected_include_zero %}checked{% endif %} data-live-change="1">
             <span>Показывать нулевые позиции</span>
         </label>
