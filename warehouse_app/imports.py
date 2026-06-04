@@ -319,13 +319,23 @@ def commit_items_import(
     if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING:
         existing_items = Item.objects.in_bulk([row.sku for row in result.rows], field_name="sku")
         items_to_update = []
+        race_errors: list[ImportErrorDetail] = []
         for row in result.rows:
-            item = existing_items[row.sku]
+            item = existing_items.get(row.sku)
+            unit = units.get(row.unit_code)
+            if item is None:
+                race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления"))
+                continue
+            if unit is None:
+                race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+                continue
             item.name = row.name
-            item.unit = units[row.unit_code]
+            item.unit = unit
             item.is_active = row.is_active
             item.notes = row.comment
             items_to_update.append(item)
+        if race_errors:
+            return ItemImportCommitResult(created_count=0, updated_count=0, errors=race_errors)
         with transaction.atomic():
             Item.objects.bulk_update(items_to_update, ["name", "unit", "is_active", "notes"])
 
