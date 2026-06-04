@@ -227,11 +227,12 @@ Technical fit:
 2. Добавить server endpoint, который отдает компактный индекс только разрешенных строк:
    - `id`;
    - `number`;
-   - `date`;
+   - `date` (`operation_date`);
    - `type`;
    - `status`;
    - `warehouse`;
    - `destination_warehouse`, если есть;
+   - `lines_count`;
    - `comment` в усеченном виде;
    - `detail_url`.
 3. Добавить feature flag или режим страницы, чтобы можно было сравнить старый и новый UX.
