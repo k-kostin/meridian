@@ -79,6 +79,12 @@ class InventoryScope(models.TextChoices):
     FULL = "full", "Полная"
 
 
+class ActivityEventType(models.TextChoices):
+    STOCK_DOCUMENT_POSTED = "stock_document_posted", "Документ проведен"
+    INVENTORY_POSTED = "inventory_posted", "Инвентаризация проведена"
+    INVENTORY_ADJUSTMENT_CREATED = "inventory_adjustment_created", "Автокорректировка создана"
+
+
 NUMBER_GENERATION_ATTEMPTS = 8
 
 
@@ -213,6 +219,10 @@ class StockDocument(TimeStampedModel):
         self.status = locked_document.status
         self.posted_at = locked_document.posted_at
 
+        from .activity import record_stock_document_posted
+
+        record_stock_document_posted(locked_document)
+
 
 class StockDocumentLine(models.Model):
     document = models.ForeignKey(StockDocument, on_delete=models.CASCADE, related_name="lines", verbose_name="Документ")
@@ -342,6 +352,7 @@ class InventoryDocument(TimeStampedModel):
                     )
                 )
 
+        adjustment = None
         if adjustment_lines:
             adjustment = StockDocument.objects.create(
                 document_type=StockDocumentType.ADJUSTMENT,
@@ -361,6 +372,12 @@ class InventoryDocument(TimeStampedModel):
         locked_inventory.save(update_fields=["status", "posted_at", "updated_at"])
         self.status = locked_inventory.status
         self.posted_at = locked_inventory.posted_at
+
+        from .activity import record_inventory_adjustment_created, record_inventory_posted
+
+        record_inventory_posted(locked_inventory)
+        if adjustment:
+            record_inventory_adjustment_created(locked_inventory, adjustment)
 
 
 class InventoryLine(models.Model):
@@ -398,3 +415,39 @@ class InventoryLine(models.Model):
     def clean(self):
         if self.actual_quantity < 0:
             raise ValidationError("Фактическое количество не может быть отрицательным.")
+
+
+class ActivityEvent(TimeStampedModel):
+    event_type = models.CharField("Тип события", max_length=40, choices=ActivityEventType.choices)
+    warehouse = models.ForeignKey(
+        Warehouse,
+        on_delete=models.PROTECT,
+        related_name="activity_events",
+        verbose_name="Склад",
+    )
+    stock_document = models.ForeignKey(
+        StockDocument,
+        on_delete=models.CASCADE,
+        related_name="activity_events",
+        verbose_name="Документ движения",
+        null=True,
+        blank=True,
+    )
+    inventory_document = models.ForeignKey(
+        InventoryDocument,
+        on_delete=models.CASCADE,
+        related_name="activity_events",
+        verbose_name="Инвентаризация",
+        null=True,
+        blank=True,
+    )
+    message = models.CharField("Событие", max_length=255)
+    metadata = models.JSONField("Метаданные", default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Событие активности"
+        verbose_name_plural = "События активности"
+
+    def __str__(self) -> str:
+        return self.message

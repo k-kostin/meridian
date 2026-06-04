@@ -14,6 +14,7 @@ from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
+from .activity import get_document_timeline, get_inventory_timeline
 from .forms import (
     InventoryDocumentForm,
     InventoryLineFormSet,
@@ -406,7 +407,14 @@ def document_detail(request: HttpRequest, pk: int) -> HttpResponse:
         StockDocument.objects.select_related("warehouse", "destination_warehouse", "source_inventory").prefetch_related("lines__item__unit"),
         pk=pk,
     )
-    return render(request, "warehouse_app/document_detail.html", {"document": document})
+    return render(
+        request,
+        "warehouse_app/document_detail.html",
+        {
+            "document": document,
+            "timeline_events": get_document_timeline(document),
+        },
+    )
 
 
 @require_POST
@@ -533,7 +541,11 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
     return render(
         request,
         "warehouse_app/inventory_detail.html",
-        {"inventory": inventory, "adjustment": adjustment},
+        {
+            "inventory": inventory,
+            "adjustment": adjustment,
+            "timeline_events": get_inventory_timeline(inventory),
+        },
     )
 
 

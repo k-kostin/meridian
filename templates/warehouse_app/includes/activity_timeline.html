@@ -1,0 +1,22 @@
+<article class="card activity-card">
+    <h3>История</h3>
+    {% if timeline_events %}
+        <ol class="activity-timeline">
+            {% for event in timeline_events %}
+                <li>
+                    <div class="activity-marker"></div>
+                    <div>
+                        <strong>{{ event.message }}</strong>
+                        <p>
+                            {{ event.created_at|date:"d.m.Y H:i" }}
+                            · {{ event.warehouse.name }}
+                            · {{ event.get_event_type_display }}
+                        </p>
+                    </div>
+                </li>
+            {% endfor %}
+        </ol>
+    {% else %}
+        <p class="empty-state">Событий пока нет.</p>
+    {% endif %}
+</article>
