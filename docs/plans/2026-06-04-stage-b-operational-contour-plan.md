@@ -584,6 +584,28 @@ Add:
         self.assertEqual(response.status_code, 200)
         self.assertTrue(Unit.objects.filter(code="box", name="box").exists())
         self.assertTrue(Item.objects.filter(sku="AUTO-UNIT-2", unit__code="box").exists())
+
+    def test_item_import_auto_create_units_deduplicates_missing_unit_codes(self):
+        admin = User.objects.create_user(username="unit-dedupe-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload(
+            [
+                ["AUTO-UNIT-3", "Позиция 1", "pack", "да", ""],
+                ["AUTO-UNIT-4", "Позиция 2", "pack", "да", ""],
+            ]
+        )
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "create_only", "auto_create_units": "1", "workbook": workbook},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Unit.objects.filter(code="pack").count(), 1)
+        self.assertEqual(Item.objects.filter(unit__code="pack").count(), 2)
 ```
 
 - [ ] **Step 2: Add explicit option**
@@ -598,6 +620,7 @@ Validation behavior:
 Commit behavior:
 
 - before creating/updating items, create missing `Unit(code=unit_code, name=unit_code)` records inside the same transaction;
+- deduplicate missing unit codes with a `set` before creating units, so two imported rows with the same new unit code do not trigger a `Unit.code` uniqueness error;
 - never overwrite existing units.
 
 - [ ] **Step 3: Add form checkbox**
@@ -619,7 +642,7 @@ Pass `auto_create_units=form.cleaned_data.get("auto_create_units", False)` to va
 - [ ] **Step 5: Run tests and commit**
 
 ```bash
-python manage.py test warehouse_app.tests.WarehouseAppTests.test_item_import_rejects_unknown_unit_without_auto_create warehouse_app.tests.WarehouseAppTests.test_item_import_auto_creates_missing_unit_when_enabled
+python manage.py test warehouse_app.tests.WarehouseAppTests.test_item_import_rejects_unknown_unit_without_auto_create warehouse_app.tests.WarehouseAppTests.test_item_import_auto_creates_missing_unit_when_enabled warehouse_app.tests.WarehouseAppTests.test_item_import_auto_create_units_deduplicates_missing_unit_codes
 python manage.py test
 python scripts/check_changed.py --full
 python scripts/check_public_readiness.py
@@ -864,10 +887,12 @@ Add:
 
 - [ ] **Step 2: Add service-level category parameter**
 
-Where balance/report builders accept query filters, add `category_id: str | None = None`. Apply it by filtering item querysets or movement querysets with:
+Where balance/report builders accept query filters, add `category_id: str | None = None`. Apply the filter with the correct relation for each queryset type.
 
 ```python
-if category_id:
+if category_id and queryset.model is Item:
+    queryset = queryset.filter(category_id=category_id)
+elif category_id:
     queryset = queryset.filter(item__category_id=category_id)
 ```
 
@@ -1035,6 +1060,17 @@ def saved_view_create(request: HttpRequest, scope: str) -> HttpResponse:
         defaults={"query_params": query_params},
     )
     messages.success(request, "Представление сохранено.")
+    return redirect("document_list" if scope == "documents" else "balance_report")
+
+
+@require_POST
+def saved_view_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    if not request.user.is_authenticated:
+        return redirect("login")
+    saved_view = get_object_or_404(UserSavedView, pk=pk, user=request.user)
+    scope = saved_view.scope
+    saved_view.delete()
+    messages.success(request, "Представление удалено.")
     return redirect("document_list" if scope == "documents" else "balance_report")
 ```
 
