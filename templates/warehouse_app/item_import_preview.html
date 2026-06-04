@@ -26,7 +26,7 @@
                 {% if form.workbook.help_text %}<small>{{ form.workbook.help_text }}</small>{% endif %}
                 {{ form.workbook.errors }}
             </div>
-            <button type="submit" class="button primary">Проверить файл</button>
+            <button type="submit" name="action" value="preview" class="button primary">Проверить файл</button>
         </form>
     </article>
 
@@ -46,7 +46,7 @@
                 <dd>Номенклатура или активный лист книги</dd>
             </div>
         </dl>
-        <p class="message">Изменения в справочник не внесены. Это только предпросмотр и проверка строк.</p>
+        <p class="message">Импорт создает только новые позиции номенклатуры. Остатки и единицы измерения не импортируются.</p>
     </article>
 </section>
 
@@ -107,6 +107,17 @@
                     </tbody>
                 </table>
             </div>
+            {% if can_commit %}
+                <form method="post" enctype="multipart/form-data" class="stack-form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="{{ form.workbook.id_for_label }}">Excel-файл для импорта</label>
+                        {{ form.workbook }}
+                        <small>Перед импортом файл проверяется повторно. Выберите тот же файл. Существующие артикулы не обновляются.</small>
+                    </div>
+                    <button type="submit" name="action" value="commit" class="button primary">Импортировать валидные строки</button>
+                </form>
+            {% endif %}
         {% endif %}
 
         {% if not result.rows and not result.errors %}
