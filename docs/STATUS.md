@@ -7,7 +7,7 @@
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
 - Current development state: Stage A stabilization is closed and released as `v0.3.0`.
 - Stage A stabilization audit: passed on 2026-06-04.
-- Next development focus: Stage B operational contour.
+- Next development focus: Stage B operational contour, starting with scope reconciliation and import flexibility.
 - UI/package version: `v0.3.0`.
 - Future milestone targets: `v0.4.0` for Stage B operational contour, `v0.5.0` for built-in analytics, `v0.6.0` for desktop packaging, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
