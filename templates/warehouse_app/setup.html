@@ -30,8 +30,10 @@
     <div class="check-item {% if opening_hint_ready %}done{% endif %}">
         <strong class="check-item-title">4. Стартовые остатки</strong>
         <span class="check-item-meta">Вводятся через полную инвентаризацию</span>
-        {% if opening_hint_ready %}
+        {% if opening_hint_ready and app_can_operate_stock %}
             <a class="check-item-action" href="{% url 'inventory_create' %}?opening=1">Создать стартовую инвентаризацию</a>
+        {% elif opening_hint_ready %}
+            <span class="check-item-action muted">Недостаточно прав для создания инвентаризации.</span>
         {% else %}
             <span class="check-item-action muted">Сначала заполните предыдущие шаги.</span>
         {% endif %}

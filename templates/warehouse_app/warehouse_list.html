@@ -13,20 +13,22 @@
 </section>
 
 <section class="two-column">
-    <article class="card">
-        <h3>Добавить склад</h3>
-        <form method="post" class="stack-form">
-            {% csrf_token %}
-            {% for field in form %}
-                <div class="field">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {{ field.errors }}
-                </div>
-            {% endfor %}
-            <button type="submit" class="button primary">Добавить</button>
-        </form>
-    </article>
+    {% if app_can_manage_references %}
+        <article class="card">
+            <h3>Добавить склад</h3>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <button type="submit" class="button primary">Добавить</button>
+            </form>
+        </article>
+    {% endif %}
     <article class="card">
         <div class="section-head">
             <h3>Список складов</h3>
@@ -56,7 +58,7 @@
                             <td>{{ warehouse.code }}</td>
                             <td>{{ warehouse.name }}</td>
                             <td>{{ warehouse.is_active|yesno:"Активен,Отключен" }}</td>
-                            <td><a class="data-link" href="{% url 'warehouse_update' warehouse.pk %}">Изменить</a></td>
+                            <td>{% if app_can_manage_references %}<a class="data-link" href="{% url 'warehouse_update' warehouse.pk %}">Изменить</a>{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr>

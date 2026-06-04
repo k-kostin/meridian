@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator
 from django.db import IntegrityError, models, transaction
@@ -79,6 +80,12 @@ class InventoryScope(models.TextChoices):
     FULL = "full", "Полная"
 
 
+class UserRole(models.TextChoices):
+    ADMIN = "admin", "Администратор"
+    OPERATOR = "operator", "Оператор"
+    VIEWER = "viewer", "Наблюдатель"
+
+
 class ActivityEventType(models.TextChoices):
     STOCK_DOCUMENT_POSTED = "stock_document_posted", "Документ проведен"
     INVENTORY_POSTED = "inventory_posted", "Инвентаризация проведена"
@@ -86,6 +93,18 @@ class ActivityEventType(models.TextChoices):
 
 
 NUMBER_GENERATION_ATTEMPTS = 8
+
+
+class UserProfile(TimeStampedModel):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="warehouse_profile")
+    role = models.CharField("Роль", max_length=20, choices=UserRole.choices, default=UserRole.OPERATOR)
+
+    class Meta:
+        verbose_name = "Профиль пользователя"
+        verbose_name_plural = "Профили пользователей"
+
+    def __str__(self) -> str:
+        return f"{self.user} / {self.get_role_display()}"
 
 
 def _generate_number(prefix: str, model_cls: type[models.Model], date_value):

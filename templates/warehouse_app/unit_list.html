@@ -13,20 +13,22 @@
 </section>
 
 <section class="two-column">
-    <article class="card">
-        <h3>Добавить единицу</h3>
-        <form method="post" class="stack-form">
-            {% csrf_token %}
-            {% for field in form %}
-                <div class="field">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {{ field.errors }}
-                </div>
-            {% endfor %}
-            <button type="submit" class="button primary">Добавить</button>
-        </form>
-    </article>
+    {% if app_can_manage_references %}
+        <article class="card">
+            <h3>Добавить единицу</h3>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <button type="submit" class="button primary">Добавить</button>
+            </form>
+        </article>
+    {% endif %}
     <article class="card">
         <div class="section-head">
             <h3>Список</h3>
@@ -56,7 +58,7 @@
                             <td>{{ unit.code }}</td>
                             <td>{{ unit.name }}</td>
                             <td>{{ unit.display_precision }}</td>
-                            <td><a class="data-link" href="{% url 'unit_update' unit.pk %}">Изменить</a></td>
+                            <td>{% if app_can_manage_references %}<a class="data-link" href="{% url 'unit_update' unit.pk %}">Изменить</a>{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr>

@@ -17,6 +17,18 @@
                 <p>Остатки, движения, инвентаризации и Excel-выгрузка.</p>
                 <small class="app-version">{{ app_version_label }}</small>
             </a>
+            <div class="account-panel">
+                <span class="role-pill">{{ app_user_role_label }}</span>
+                {% if request.user.is_authenticated %}
+                    <span class="muted">{{ request.user.username }}</span>
+                    <form method="post" action="{% url 'logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="link-button">Выйти</button>
+                    </form>
+                {% else %}
+                    <a class="data-link" href="{% url 'login' %}">Войти</a>
+                {% endif %}
+            </div>
             <nav class="nav">
                 <div class="nav-group">
                     <span class="nav-group-title">Обзор</span>
@@ -57,13 +69,15 @@
                             <small>Перезагрузка заменит текущие данные в этой демонстрационной базе.</small>
                         {% endif %}
                     </div>
-                    <form method="post" action="{% url 'demo_load' %}">
-                        {% csrf_token %}
-                        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-                        <button type="submit" class="button primary" {% if app_has_core_data %}onclick="return confirm('Перезагрузить демо-набор? Текущие данные демонстрационной базы будут удалены.');"{% endif %}>
-                            {% if app_has_core_data %}Перезагрузить демо-данные{% else %}Загрузить демо-данные{% endif %}
-                        </button>
-                    </form>
+                    {% if app_can_reset_demo %}
+                        <form method="post" action="{% url 'demo_load' %}">
+                            {% csrf_token %}
+                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                            <button type="submit" class="button primary" {% if app_has_core_data %}onclick="return confirm('Перезагрузить демо-набор? Текущие данные демонстрационной базы будут удалены.');"{% endif %}>
+                                {% if app_has_core_data %}Перезагрузить демо-данные{% else %}Загрузить демо-данные{% endif %}
+                            </button>
+                        </form>
+                    {% endif %}
                 </div>
             {% endif %}
             {% if messages %}

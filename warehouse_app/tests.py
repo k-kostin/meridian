@@ -1,6 +1,7 @@
 from io import BytesIO
 from datetime import date
 from decimal import Decimal
+from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
@@ -20,6 +21,8 @@ from .models import (
     StockDocumentLine,
     StockDocumentType,
     Unit,
+    UserProfile,
+    UserRole,
     Warehouse,
 )
 from .services import (
@@ -52,6 +55,90 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_authenticated_viewer_cannot_open_document_create(self):
+        user = User.objects.create_user(username="viewer", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_authenticated_operator_can_open_document_create(self):
+        user = User.objects.create_user(username="operator", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.OPERATOR)
+        self.client.force_login(user)
+
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_anonymous_local_user_keeps_current_document_create_flow(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_viewer_cannot_post_document(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=timezone.localdate(),
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("3"))
+        user = User.objects.create_user(username="viewer-post", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.post(f"/documents/{document.pk}/post/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_operator_cannot_edit_unit(self):
+        user = User.objects.create_user(username="operator-unit", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.OPERATOR)
+        self.client.force_login(user)
+
+        response = self.client.get(f"/units/{self.unit.pk}/edit/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_edit_unit(self):
+        user = User.objects.create_user(username="admin-unit", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.ADMIN)
+        self.client.force_login(user)
+
+        response = self.client.get(f"/units/{self.unit.pk}/edit/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_viewer_can_read_reference_list(self):
+        user = User.objects.create_user(username="viewer-ref", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.get("/units/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.unit.name)
+
+    def test_viewer_sees_role_badge_and_no_document_create_cta(self):
+        user = User.objects.create_user(username="viewer-ui", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.get("/documents/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Наблюдатель")
+        self.assertNotContains(response, "Новый приход")
+        self.assertContains(response, "Выгрузить Excel")
+
+    def test_login_page_renders(self):
+        response = self.client.get("/accounts/login/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Вход в систему")
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(

@@ -10,10 +10,12 @@
         <p>Журнал документов с фильтрацией по складу, типу, статусу и диапазону дат.</p>
     </div>
     <div class="page-actions">
-        <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
-        <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
-        <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
-        <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
+        {% if app_can_operate_stock %}
+            <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+            <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
+            <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
+            <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
+        {% endif %}
         <a class="button" href="{% url 'export_movements' %}{% if movements_query_string %}?{{ movements_query_string }}{% endif %}">Выгрузить Excel</a>
     </div>
 </section>
@@ -93,12 +95,14 @@
                                 <div class="empty-state-block">
                                     <strong>Документы движения пока не созданы.</strong>
                                     <span>Начните с нового прихода, расхода или корректировки из кнопок над журналом.</span>
-                                    <div class="empty-state-actions">
-                                        <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
-                                        <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
-                                        <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
-                                        <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
-                                    </div>
+                                    {% if app_can_operate_stock %}
+                                        <div class="empty-state-actions">
+                                            <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+                                            <a class="button" href="{% url 'document_create' %}?type=issue">Новый расход</a>
+                                            <a class="button" href="{% url 'document_create' %}?type=adjustment">Новая корректировка</a>
+                                            <a class="button" href="{% url 'document_create' %}?type=transfer">Новое перемещение</a>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>

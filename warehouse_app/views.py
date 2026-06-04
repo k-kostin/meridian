@@ -3,7 +3,7 @@ from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
@@ -37,6 +37,7 @@ from .models import (
     Unit,
     Warehouse,
 )
+from .permissions import can_manage_references, require_demo_admin, require_reference_manager, require_stock_operator
 from .services import (
     PRESENTATION_BY_WAREHOUSE,
     PRESENTATION_CONSOLIDATED,
@@ -203,6 +204,8 @@ def unit_list(request: HttpRequest) -> HttpResponse:
     page_obj, page_size, pagination_query = _paginate_collection(units, request)
 
     form = UnitForm(request.POST or None)
+    if request.method == "POST" and not can_manage_references(request.user):
+        raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Единица измерения добавлена.")
@@ -222,6 +225,7 @@ def unit_list(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_reference_manager
 def unit_update(request: HttpRequest, pk: int) -> HttpResponse:
     unit = get_object_or_404(Unit, pk=pk)
     form = UnitForm(request.POST or None, instance=unit)
@@ -244,6 +248,8 @@ def warehouse_list(request: HttpRequest) -> HttpResponse:
     page_obj, page_size, pagination_query = _paginate_collection(warehouses, request)
 
     form = WarehouseForm(request.POST or None)
+    if request.method == "POST" and not can_manage_references(request.user):
+        raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Склад добавлен.")
@@ -263,6 +269,7 @@ def warehouse_list(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_reference_manager
 def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
     warehouse = get_object_or_404(Warehouse, pk=pk)
     form = WarehouseForm(request.POST or None, instance=warehouse)
@@ -285,6 +292,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
     page_obj, page_size, pagination_query = _paginate_collection(items, request)
 
     form = ItemForm(request.POST or None)
+    if request.method == "POST" and not can_manage_references(request.user):
+        raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
         form.save()
         messages.success(request, "Номенклатура добавлена.")
@@ -305,6 +314,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_reference_manager
 def item_update(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(Item, pk=pk)
     form = ItemForm(request.POST or None, instance=item)
@@ -386,6 +396,7 @@ def document_list(request: HttpRequest) -> HttpResponse:
     return render(request, "warehouse_app/document_list.html", context)
 
 
+@require_stock_operator
 def document_create(request: HttpRequest) -> HttpResponse:
     initial = {}
     requested_type = request.GET.get("type")
@@ -417,6 +428,7 @@ def document_create(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_stock_operator
 def document_update(request: HttpRequest, pk: int) -> HttpResponse:
     document = get_object_or_404(StockDocument.objects.prefetch_related("lines__item"), pk=pk)
     if document.status != DocumentStatus.DRAFT:
@@ -465,6 +477,7 @@ def document_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @require_POST
+@require_stock_operator
 def document_post(request: HttpRequest, pk: int) -> HttpResponse:
     document = get_object_or_404(StockDocument, pk=pk)
     try:
@@ -512,6 +525,7 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
     return render(request, "warehouse_app/inventory_list.html", context)
 
 
+@require_stock_operator
 def inventory_create(request: HttpRequest) -> HttpResponse:
     opening_mode = request.GET.get("opening") == "1"
     initial = {}
@@ -545,6 +559,7 @@ def inventory_create(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_stock_operator
 def inventory_update(request: HttpRequest, pk: int) -> HttpResponse:
     inventory = get_object_or_404(InventoryDocument.objects.prefetch_related("lines__item"), pk=pk)
     if inventory.status != DocumentStatus.DRAFT:
@@ -597,6 +612,7 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @require_POST
+@require_stock_operator
 def inventory_post(request: HttpRequest, pk: int) -> HttpResponse:
     inventory = get_object_or_404(InventoryDocument, pk=pk)
     try:
@@ -903,6 +919,7 @@ def export_monthly_ledger(request: HttpRequest) -> HttpResponse:
 
 
 @require_POST
+@require_demo_admin
 def demo_load(request: HttpRequest) -> HttpResponse:
     requested_next = request.POST.get("next")
 
