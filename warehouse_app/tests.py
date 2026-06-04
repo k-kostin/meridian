@@ -267,6 +267,22 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].sku, "SKU-003")
         self.assertEqual(result.rows[0].is_active, False)
 
+    def test_parse_items_import_workbook_uses_resolved_alias_column_consistently(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Артикул", "Код", "Наименование", "Единица"])
+        sheet.append(["", "FALLBACK-SKU", "Позиция с пустым артикулом", "pcs"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(result.rows[0].sku, "")
+        self.assertIn("Артикул обязателен", [error.message for error in result.errors])
+
     def _import_workbook_upload(self, rows, headers=None):
         workbook = Workbook()
         sheet = workbook.active
@@ -334,6 +350,19 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(len(result.rows), 1)
         self.assertEqual(result.rows[0].actual_quantity, Decimal("0"))
         self.assertEqual(result.errors[0].message, "Фактическое количество должно быть числом")
+
+    def test_parse_opening_inventory_import_workbook_uses_resolved_alias_column_consistently(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload(
+            [[self.warehouse.code, "", "FALLBACK-SKU", "12", "остаток"]],
+            headers=["Склад", "Артикул", "SKU", "Фактическое количество", "Комментарий"],
+        )
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(result.rows[0].sku, "")
+        self.assertIn("Артикул обязателен", [error.message for error in result.errors])
 
     def test_validate_opening_inventory_import_blocks_unknown_references_and_duplicates(self):
         from .imports import parse_opening_inventory_import_workbook, validate_opening_inventory_import_result
