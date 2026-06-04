@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Предпросмотр импорта номенклатуры{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Импорт</span>
+        <h2>Предпросмотр импорта номенклатуры</h2>
+        <p>Загрузите Excel-файл, чтобы проверить строки перед будущим импортом. На этом этапе справочник не изменяется.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'item_list' %}">Назад к номенклатуре</a>
+    </div>
+</section>
+
+<section class="two-column wide-left">
+    <article class="card">
+        <h3>Файл для проверки</h3>
+        <form method="post" enctype="multipart/form-data" class="stack-form">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <div class="field">
+                <label for="{{ form.workbook.id_for_label }}">{{ form.workbook.label }}</label>
+                {{ form.workbook }}
+                {% if form.workbook.help_text %}<small>{{ form.workbook.help_text }}</small>{% endif %}
+                {{ form.workbook.errors }}
+            </div>
+            <button type="submit" class="button primary">Проверить файл</button>
+        </form>
+    </article>
+
+    <article class="card">
+        <h3>Ожидаемые колонки</h3>
+        <dl class="meta-list">
+            <div>
+                <dt>Обязательные</dt>
+                <dd>Артикул, Наименование, Единица</dd>
+            </div>
+            <div>
+                <dt>Дополнительные</dt>
+                <dd>Активна, Комментарий</dd>
+            </div>
+            <div>
+                <dt>Лист</dt>
+                <dd>Номенклатура или активный лист книги</dd>
+            </div>
+        </dl>
+        <p class="message">Изменения в справочник не внесены. Это только предпросмотр и проверка строк.</p>
+    </article>
+</section>
+
+{% if has_preview %}
+    <section class="card">
+        <div class="section-head">
+            <h3>Результат проверки</h3>
+            <span class="muted">Строк: {{ result.rows|length }} · Ошибок: {{ result.errors|length }}</span>
+        </div>
+
+        {% if result.errors %}
+            <h4>Ошибки в строках</h4>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Строка</th>
+                            <th>Ошибка</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for error in result.errors %}
+                            <tr>
+                                <td>{{ error.row_number }}</td>
+                                <td>{{ error.message }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if result.rows %}
+            <h4>Строки предпросмотра</h4>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Строка</th>
+                            <th>Артикул</th>
+                            <th>Наименование</th>
+                            <th>Единица</th>
+                            <th>Активна</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in result.rows %}
+                            <tr>
+                                <td>{{ row.row_number }}</td>
+                                <td>{{ row.sku|default:"-" }}</td>
+                                <td>{{ row.name|default:"-" }}</td>
+                                <td>{{ row.unit_code|default:"-" }}</td>
+                                <td>{{ row.is_active|yesno:"Да,Нет" }}</td>
+                                <td>{{ row.comment|default:"" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if not result.rows and not result.errors %}
+            <div class="empty-state-block">
+                <strong>Файл прочитан, но строк для предпросмотра нет.</strong>
+                <span>Проверьте, что после строки заголовков есть заполненные строки номенклатуры.</span>
+            </div>
+        {% endif %}
+    </section>
+{% endif %}
+{% endblock %}

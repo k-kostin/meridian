@@ -19,11 +19,13 @@ from .forms import (
     InventoryDocumentForm,
     InventoryLineFormSet,
     ItemForm,
+    ItemImportPreviewForm,
     StockDocumentForm,
     StockLineFormSet,
     UnitForm,
     WarehouseForm,
 )
+from .imports import parse_items_import_workbook
 from .demo import has_business_data, seed_demo_data
 from .models import (
     DocumentStatus,
@@ -310,6 +312,30 @@ def item_list(request: HttpRequest) -> HttpResponse:
             "page_size_options": PAGE_SIZE_OPTIONS,
             "pagination_query": pagination_query,
             "query": query,
+        },
+    )
+
+
+@require_reference_manager
+def item_import_preview(request: HttpRequest) -> HttpResponse:
+    form = ItemImportPreviewForm(request.POST or None, request.FILES or None)
+    result = None
+    has_preview = False
+
+    if request.method == "POST" and form.is_valid():
+        try:
+            result = parse_items_import_workbook(form.cleaned_data["workbook"])
+            has_preview = True
+        except Exception:
+            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
+
+    return render(
+        request,
+        "warehouse_app/item_import_preview.html",
+        {
+            "form": form,
+            "result": result,
+            "has_preview": has_preview,
         },
     )
 

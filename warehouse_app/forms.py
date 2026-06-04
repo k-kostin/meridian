@@ -63,6 +63,22 @@ class ItemForm(StyledFieldsMixin, forms.ModelForm):
         fields = ["sku", "name", "unit", "is_active", "notes"]
 
 
+class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
+    workbook = forms.FileField(label="Excel-файл .xlsx")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["workbook"].help_text = "Ожидается лист «Номенклатура» или активный лист с нужными колонками."
+        self.fields["workbook"].widget.attrs["accept"] = ".xlsx"
+        self._apply_field_styles()
+
+    def clean_workbook(self):
+        workbook = self.cleaned_data["workbook"]
+        if not workbook.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError("Загрузите файл в формате .xlsx.")
+        return workbook
+
+
 class StockDocumentForm(StyledFieldsMixin, forms.ModelForm):
     class Meta:
         model = StockDocument
