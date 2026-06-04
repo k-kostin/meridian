@@ -5,7 +5,9 @@
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Current development branch: `v0.3 Import Foundation`.
+- Current development state: Stage A stabilization slices through opening inventory import are merged on `main`.
+- Stage A stabilization audit: passed on 2026-06-04.
+- Next development focus: Stage B operational contour.
 - UI/package version remains `v0.2.0` until an explicit release bump.
 - Next-version work must preserve the baseline do-not-regress list.
 
@@ -193,7 +195,7 @@ python manage.py test
 
 1. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 2. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
-3. Проверить полный import preview + commit flow для номенклатуры и стартовых остатков в браузере на реальных `.xlsx`.
+3. Begin Stage B operational contour work.
 4. Решить, нужны ли обновление существующих позиций и auto-create единиц в импорте номенклатуры.
 5. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
 6. Решить, нужны ли контрагенты, цены и дополнительные документы поверх текущего складского ядра.
