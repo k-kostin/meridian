@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.utils import timezone
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 from .demo import seed_demo_data
 from .models import (
@@ -139,6 +139,76 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Вход в систему")
+
+    def test_parse_items_import_workbook_returns_rows(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Номенклатура"
+        sheet.append(["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
+        sheet.append(["SKU-001", "Позиция импорта", "kg", "да", "тестовая строка"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.errors, [])
+        row = result.rows[0]
+        self.assertEqual(row.row_number, 2)
+        self.assertEqual(row.sku, "SKU-001")
+        self.assertEqual(row.name, "Позиция импорта")
+        self.assertEqual(row.unit_code, "kg")
+        self.assertEqual(row.is_active, True)
+        self.assertEqual(row.comment, "тестовая строка")
+
+    def test_parse_items_import_workbook_reports_row_errors(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "Номенклатура"
+        sheet.append(["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
+        sheet.append(["", "", "", "нет", "неполная строка"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].row_number, 2)
+        self.assertEqual(result.rows[0].is_active, False)
+        self.assertEqual(
+            [(error.row_number, error.message) for error in result.errors],
+            [
+                (2, "Артикул обязателен"),
+                (2, "Наименование обязательно"),
+                (2, "Единица обязательна"),
+            ],
+        )
+
+    def test_parse_items_import_workbook_skips_empty_rows(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
+        sheet.append([None, None, None, None, None])
+        sheet.append(["SKU-002", "Вторая позиция", "pcs", "", ""])
+        sheet.append(["", "", "", "", ""])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].sku, "SKU-002")
+        self.assertEqual(result.rows[0].is_active, True)
+        self.assertEqual(result.errors, [])
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(

@@ -1,11 +1,12 @@
 # STATUS.md
 
-Снимок проекта на 2026-06-03.
+Снимок проекта на 2026-06-04.
 
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Current development version: `v0.2.0 Foundation`.
+- Current development branch: `v0.3 Import Foundation`.
+- UI/package version remains `v0.2.0` until an explicit release bump.
 - Next-version work must preserve the baseline do-not-regress list.
 
 ## Что сейчас работает
@@ -64,6 +65,11 @@
   - `operator` может выполнять складские операции, но не редактировать справочники и не перезагружать демо-данные;
   - `viewer` может читать списки, карточки, отчеты и Excel-выгрузки без write-действий;
   - анонимный локальный режим сохраняет текущий demo/desktop MVP-flow;
+- parser-only foundation для импорта Excel-номенклатуры:
+  - чтение листа `Номенклатура` или активного листа;
+  - preview-строки по `Артикул / Наименование / Единица / Активна / Комментарий`;
+  - row-level validation errors для обязательных полей;
+  - без записи в БД и без импорта остатков;
 
 ## Что подготовлено по desktop/gui-app направлению
 
@@ -162,8 +168,8 @@ python manage.py test
 
 ## Известные ограничения
 
-- нет авторизации и ролей;
-- нет импорта из Excel;
+- нет UI и commit-flow для импорта из Excel;
+- нет импорта стартовых остатков из Excel через инвентаризацию;
 - нет разреза по группам номенклатуры;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
@@ -175,8 +181,8 @@ python manage.py test
 
 1. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 2. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
-3. Решить, нужно ли развивать базовые роли в полноценную модель пользователей для production-контуров.
-4. Решить, нужен ли импорт стартовых остатков из Excel.
-5. Определить, нужен ли импорт стартовых остатков в production-контуре без ручного ввода.
+3. Добавить UI preview для импорта номенклатуры из Excel на базе `warehouse_app/imports.py`.
+4. Добавить безопасный commit-flow для импорта номенклатуры после preview/validation.
+5. Решить, нужен ли импорт стартовых остатков из Excel через документы инвентаризации.
 6. Решить, нужны ли контрагенты, цены и дополнительные документы поверх текущего складского ядра.
 7. После появления ролей решить, нужны ли пользовательские сохраненные представления поверх встроенных быстрых фильтров.
