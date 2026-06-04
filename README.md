@@ -15,7 +15,7 @@ The project is intentionally compact:
 
 This repository starts from the `v0.1 MVP Baseline` and is now evolving through controlled hardening slices.
 
-The baseline is useful for local demo and pilot-style evaluation, but it is not production-complete. Current work adds activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, and a parser-only Excel import foundation for nomenclature preview/validation. Remaining gaps include import UI/commit workflows, production-grade RBAC, user-defined saved views, and installer validation.
+The baseline is useful for local demo and pilot-style evaluation, but it is not production-complete. Current work adds activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, and Excel nomenclature import for creating new items after preview/validation. Remaining gaps include opening balance import, production-grade RBAC, user-defined saved views, and installer validation.
 
 ## Local Development
 
