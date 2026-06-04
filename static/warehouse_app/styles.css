@@ -72,6 +72,33 @@ a {
     font-weight: 650;
 }
 
+.account-panel {
+    display: grid;
+    gap: 6px;
+    margin-top: 14px;
+}
+
+.role-pill {
+    display: inline-flex;
+    width: fit-content;
+    border: 1px solid rgba(242, 237, 230, 0.24);
+    border-radius: 999px;
+    padding: 4px 9px;
+    color: rgba(242, 237, 230, 0.72);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.link-button {
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #f2ede6;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
 .brand-kicker,
 .eyebrow {
     letter-spacing: 0.12em;

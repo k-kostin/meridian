@@ -15,21 +15,23 @@
 </section>
 
 <section class="two-column wide-left">
-    <article class="card">
-        <h3>Добавить позицию</h3>
-        <form method="post" class="stack-form">
-            {% csrf_token %}
-            {% for field in form %}
-                <div class="field">
-                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-                    {{ field.errors }}
-                </div>
-            {% endfor %}
-            <button type="submit" class="button primary">Добавить</button>
-        </form>
-    </article>
+    {% if app_can_manage_references %}
+        <article class="card">
+            <h3>Добавить позицию</h3>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <button type="submit" class="button primary">Добавить</button>
+            </form>
+        </article>
+    {% endif %}
     <article class="card">
         <div class="section-head">
             <h3>Список номенклатуры</h3>
@@ -61,7 +63,7 @@
                             <td>{{ item.name }}</td>
                             <td>{{ item.unit.code }}</td>
                             <td>{{ item.is_active|yesno:"Активна,Отключена" }}</td>
-                            <td><a class="data-link" href="{% url 'item_update' item.pk %}">Изменить</a></td>
+                            <td>{% if app_can_manage_references %}<a class="data-link" href="{% url 'item_update' item.pk %}">Изменить</a>{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr>

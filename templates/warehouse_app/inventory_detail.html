@@ -12,7 +12,7 @@
     </div>
     <div class="page-actions">
         <a class="button" href="{% url 'inventory_list' %}">Назад к инвентаризациям</a>
-        {% if inventory.status == "draft" %}
+        {% if inventory.status == "draft" and app_can_operate_stock %}
             <a class="button" href="{% url 'inventory_update' inventory.pk %}">Редактировать черновик</a>
             <form method="post" action="{% url 'inventory_post' inventory.pk %}" onsubmit="return confirm('Провести инвентаризацию? После проведения документ нельзя изменить.');">
                 {% csrf_token %}

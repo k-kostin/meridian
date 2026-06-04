@@ -11,15 +11,17 @@
         <p>Остатки по складу, документы движения, инвентаризации и выгрузка в Excel.</p>
     </div>
     <div class="hero-actions">
-        {% if setup_ready %}
-            <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
-            {% if has_posted_activity %}
-                <a class="button" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+        {% if app_can_operate_stock %}
+            {% if setup_ready %}
+                <a class="button primary" href="{% url 'document_create' %}?type=receipt">Новый приход</a>
+                {% if has_posted_activity %}
+                    <a class="button" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+                {% else %}
+                    <a class="button" href="{% url 'inventory_create' %}?opening=1">Стартовая инвентаризация</a>
+                {% endif %}
             {% else %}
-                <a class="button" href="{% url 'inventory_create' %}?opening=1">Стартовая инвентаризация</a>
+                <a class="button primary" href="{% url 'setup' %}">Первичная настройка</a>
             {% endif %}
-        {% else %}
-            <a class="button primary" href="{% url 'setup' %}">Первичная настройка</a>
         {% endif %}
     </div>
 </section>
@@ -99,7 +101,9 @@
             {% else %}
                 <h4>Нужна первичная настройка</h4>
                 <p>Сначала создайте единицы измерения, склад и номенклатуру, затем внесите стартовые остатки через инвентаризацию.</p>
-                <a class="button" href="{% url 'setup' %}">Открыть мастер настройки</a>
+                {% if app_can_manage_references %}
+                    <a class="button" href="{% url 'setup' %}">Открыть мастер настройки</a>
+                {% endif %}
             {% endif %}
         </div>
     </article>

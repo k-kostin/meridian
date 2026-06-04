@@ -13,9 +13,9 @@ The project is intentionally compact:
 
 ## Status
 
-This repository starts from the `v0.1 MVP Baseline`.
+This repository starts from the `v0.1 MVP Baseline` and is now evolving through controlled `v0.2` hardening slices.
 
-The baseline is useful for local demo and pilot-style evaluation, but it is not production-complete. Known gaps include roles, import workflows, audit timeline, saved views, and installer validation.
+The baseline is useful for local demo and pilot-style evaluation, but it is not production-complete. Current `v0.2` work adds activity history, built-in quick filter presets, and basic `admin / operator / viewer` role UX. Remaining gaps include import workflows, production-grade RBAC, user-defined saved views, and installer validation.
 
 ## Local Development
 

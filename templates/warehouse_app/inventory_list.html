@@ -10,7 +10,9 @@
         <p>Журнал инвентаризаций со статусами проведения и переходом к автоматическим корректировкам.</p>
     </div>
     <div class="page-actions">
-        <a class="button primary" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+        {% if app_can_operate_stock %}
+            <a class="button primary" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+        {% endif %}
         <a class="button" href="{% url 'export_inventories' %}">Выгрузить Excel</a>
     </div>
 </section>
@@ -68,9 +70,11 @@
                                 <div class="empty-state-block">
                                     <strong>Инвентаризации пока не создавались.</strong>
                                     <span>Создайте первую инвентаризацию, чтобы сверить фактические остатки и при необходимости сформировать корректировку.</span>
-                                    <div class="empty-state-actions">
-                                        <a class="button primary" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
-                                    </div>
+                                    {% if app_can_operate_stock %}
+                                        <div class="empty-state-actions">
+                                            <a class="button primary" href="{% url 'inventory_create' %}">Новая инвентаризация</a>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
