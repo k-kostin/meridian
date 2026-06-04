@@ -36,6 +36,7 @@ class ItemImportResult:
 @dataclass(frozen=True)
 class ItemImportCommitResult:
     created_count: int
+    updated_count: int
     errors: list[ImportErrorDetail]
 
 
@@ -84,6 +85,9 @@ OPENING_INVENTORY_COLUMN_ALIASES = {
     "Фактическое количество": ["Фактическое количество", "Количество", "Остаток", "Факт"],
     "Комментарий": ["Комментарий", "Примечание"],
 }
+ITEM_IMPORT_MODE_CREATE_ONLY = "create_only"
+ITEM_IMPORT_MODE_UPDATE_EXISTING = "update_existing"
+ITEM_IMPORT_MODES = {ITEM_IMPORT_MODE_CREATE_ONLY, ITEM_IMPORT_MODE_UPDATE_EXISTING}
 
 
 def _as_text(value) -> str:
@@ -242,7 +246,18 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
         workbook.close()
 
 
-def validate_items_import_result(result: ItemImportResult) -> list[ImportErrorDetail]:
+def _normalize_item_import_mode(import_mode: str) -> str:
+    if import_mode in ITEM_IMPORT_MODES:
+        return import_mode
+    return ITEM_IMPORT_MODE_CREATE_ONLY
+
+
+def validate_items_import_result(
+    result: ItemImportResult,
+    *,
+    import_mode: str = ITEM_IMPORT_MODE_CREATE_ONLY,
+) -> list[ImportErrorDetail]:
+    import_mode = _normalize_item_import_mode(import_mode)
     errors = list(result.errors)
     seen_skus: set[str] = set()
     skus = {row.sku for row in result.rows if row.sku}
@@ -256,8 +271,10 @@ def validate_items_import_result(result: ItemImportResult) -> list[ImportErrorDe
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул повторяется в файле"))
             else:
                 seen_skus.add(row.sku)
-            if row.sku in existing_skus:
+            if import_mode == ITEM_IMPORT_MODE_CREATE_ONLY and row.sku in existing_skus:
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул уже существует"))
+            if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING and row.sku not in existing_skus:
+                errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления"))
 
         if row.unit_code and row.unit_code not in existing_unit_codes:
             errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
@@ -288,12 +305,32 @@ def validate_opening_inventory_import_result(result: OpeningInventoryImportResul
     return errors
 
 
-def commit_items_import(result: ItemImportResult) -> ItemImportCommitResult:
-    errors = validate_items_import_result(result)
+def commit_items_import(
+    result: ItemImportResult,
+    *,
+    import_mode: str = ITEM_IMPORT_MODE_CREATE_ONLY,
+) -> ItemImportCommitResult:
+    import_mode = _normalize_item_import_mode(import_mode)
+    errors = validate_items_import_result(result, import_mode=import_mode)
     if errors:
-        return ItemImportCommitResult(created_count=0, errors=errors)
+        return ItemImportCommitResult(created_count=0, updated_count=0, errors=errors)
 
     units = Unit.objects.in_bulk([row.unit_code for row in result.rows], field_name="code")
+    if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING:
+        existing_items = Item.objects.in_bulk([row.sku for row in result.rows], field_name="sku")
+        items_to_update = []
+        for row in result.rows:
+            item = existing_items[row.sku]
+            item.name = row.name
+            item.unit = units[row.unit_code]
+            item.is_active = row.is_active
+            item.notes = row.comment
+            items_to_update.append(item)
+        with transaction.atomic():
+            Item.objects.bulk_update(items_to_update, ["name", "unit", "is_active", "notes"])
+
+        return ItemImportCommitResult(created_count=0, updated_count=len(items_to_update), errors=[])
+
     items = [
         Item(
             sku=row.sku,
@@ -307,7 +344,7 @@ def commit_items_import(result: ItemImportResult) -> ItemImportCommitResult:
     with transaction.atomic():
         Item.objects.bulk_create(items)
 
-    return ItemImportCommitResult(created_count=len(result.rows), errors=[])
+    return ItemImportCommitResult(created_count=len(result.rows), updated_count=0, errors=[])
 
 
 def commit_opening_inventory_import(result: OpeningInventoryImportResult) -> OpeningInventoryImportCommitResult:

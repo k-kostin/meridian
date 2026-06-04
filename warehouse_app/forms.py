@@ -1,6 +1,7 @@
 from django import forms
 from django.forms import BaseFormSet, formset_factory
 
+from .imports import ITEM_IMPORT_MODE_CREATE_ONLY, ITEM_IMPORT_MODE_UPDATE_EXISTING
 from .models import (
     InventoryDocument,
     InventoryScope,
@@ -65,6 +66,15 @@ class ItemForm(StyledFieldsMixin, forms.ModelForm):
 
 class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
     workbook = forms.FileField(label="Excel-файл .xlsx")
+    import_mode = forms.ChoiceField(
+        label="Режим импорта",
+        choices=[
+            (ITEM_IMPORT_MODE_CREATE_ONLY, "Создать только новые позиции"),
+            (ITEM_IMPORT_MODE_UPDATE_EXISTING, "Обновить существующие позиции"),
+        ],
+        initial=ITEM_IMPORT_MODE_CREATE_ONLY,
+        required=False,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -81,6 +91,9 @@ class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
         if workbook and not workbook.name.lower().endswith(".xlsx"):
             raise forms.ValidationError("Загрузите файл в формате .xlsx.")
         return workbook
+
+    def clean_import_mode(self):
+        return self.cleaned_data.get("import_mode") or ITEM_IMPORT_MODE_CREATE_ONLY
 
 
 class OpeningInventoryImportForm(StyledFieldsMixin, forms.Form):
