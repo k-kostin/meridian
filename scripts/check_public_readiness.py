@@ -109,17 +109,32 @@ def check_required_files(root: Path) -> list[str]:
 def check_forbidden_paths(root: Path) -> list[str]:
     errors = []
     reported_forbidden = set()
-    for path in iter_files(root):
-        relative = path.relative_to(root)
-        if path.name in FORBIDDEN_FILE_NAMES:
-            errors.append(f"forbidden file: {relative}")
-        for index, part in enumerate(relative.parts):
-            if part in FORBIDDEN_PATH_PARTS:
-                forbidden_path = Path(*relative.parts[: index + 1])
+
+    for current_root, dirnames, filenames in os.walk(root):
+        current = Path(current_root)
+        relative_current = current.relative_to(root)
+        if ".git" in relative_current.parts:
+            dirnames[:] = []
+            continue
+
+        allowed_dirnames = []
+        for dirname in dirnames:
+            if dirname == ".git":
+                continue
+            if dirname in FORBIDDEN_PATH_PARTS:
+                forbidden_path = relative_current / dirname if relative_current.parts else Path(dirname)
                 if forbidden_path not in reported_forbidden:
                     reported_forbidden.add(forbidden_path)
                     errors.append(f"forbidden path: {forbidden_path}")
-                break
+                continue
+            allowed_dirnames.append(dirname)
+        dirnames[:] = allowed_dirnames
+
+        for filename in filenames:
+            if filename in FORBIDDEN_FILE_NAMES:
+                relative = relative_current / filename if relative_current.parts else Path(filename)
+                errors.append(f"forbidden file: {relative}")
+
     return errors
 
 
