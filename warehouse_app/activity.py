@@ -60,14 +60,10 @@ def record_inventory_adjustment_created(inventory: InventoryDocument, adjustment
 def get_document_timeline(document: StockDocument):
     return ActivityEvent.objects.select_related(
         "warehouse",
-        "stock_document",
-        "inventory_document",
     ).filter(stock_document=document)
 
 
 def get_inventory_timeline(inventory: InventoryDocument):
     return ActivityEvent.objects.select_related(
         "warehouse",
-        "stock_document",
-        "inventory_document",
     ).filter(inventory_document=inventory)

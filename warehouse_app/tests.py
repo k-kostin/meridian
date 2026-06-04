@@ -9,6 +9,7 @@ from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
 from .demo import seed_demo_data
+from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
     ActivityEventType,
@@ -43,6 +44,7 @@ from .services import (
 )
 
 
+@override_settings(DEMO_MODE=True)
 class WarehouseFlowTests(TestCase):
     def setUp(self):
         self.unit = Unit.objects.create(code="kg", name="Килограмм")
@@ -74,10 +76,48 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    @override_settings(DEMO_MODE=True)
     def test_anonymous_local_user_keeps_current_document_create_flow(self):
         response = self.client.get("/documents/new/")
 
         self.assertEqual(response.status_code, 200)
+
+    @override_settings(DEMO_MODE=False)
+    def test_anonymous_production_user_cannot_open_document_create(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(DEMO_MODE=False)
+    def test_anonymous_production_user_sees_guest_role_label(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Гость")
+        self.assertNotContains(response, "Локальный режим")
+
+    @override_settings(DEMO_MODE=True)
+    def test_anonymous_demo_user_keeps_current_document_create_flow(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_superuser_gets_admin_role(self):
+        user = User.objects.create_superuser(username="root", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get("/items/import/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_authenticated_user_without_profile_does_not_create_profile_on_read(self):
+        user = User.objects.create_user(username="no-profile", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserProfile.objects.filter(user=user).exists())
 
     def test_viewer_cannot_post_document(self):
         document = StockDocument.objects.create(
@@ -210,6 +250,23 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].is_active, True)
         self.assertEqual(result.errors, [])
 
+    def test_parse_items_import_workbook_accepts_case_insensitive_headers_and_common_false_values(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["артикул", "НАИМЕНОВАНИЕ", "единица", "активна", "комментарий"])
+        sheet.append(["SKU-003", "Третья позиция", "kg", "off", ""])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.rows[0].sku, "SKU-003")
+        self.assertEqual(result.rows[0].is_active, False)
+
     def _import_workbook_upload(self, rows):
         workbook = Workbook()
         sheet = workbook.active
@@ -222,6 +279,122 @@ class WarehouseFlowTests(TestCase):
         buffer.seek(0)
         buffer.name = "items.xlsx"
         return buffer
+
+    def _opening_inventory_workbook_upload(self, rows, sheet_name="Стартовые остатки"):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = sheet_name
+        sheet.append(["Склад", "Артикул", "Фактическое количество", "Комментарий"])
+        for row in rows:
+            sheet.append(row)
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+        buffer.name = "opening-stock.xlsx"
+        return buffer
+
+    def test_parse_opening_inventory_import_workbook_returns_rows(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload(
+            [
+                ["main", self.item.sku, 12.5, "остаток"],
+            ]
+        )
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].warehouse_code, "main")
+        self.assertEqual(result.rows[0].sku, self.item.sku)
+        self.assertEqual(result.rows[0].actual_quantity, Decimal("12.5"))
+        self.assertEqual(result.rows[0].comment, "остаток")
+        self.assertEqual(result.errors, [])
+
+    def test_parse_opening_inventory_import_workbook_reports_required_fields(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload([["", "", "", "bad"]])
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(
+            [error.message for error in result.errors],
+            ["Склад обязателен", "Артикул обязателен", "Фактическое количество обязательно"],
+        )
+
+    def test_parse_opening_inventory_import_workbook_reports_invalid_quantity(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload([["main", self.item.sku, "abc", "bad"]])
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].actual_quantity, Decimal("0"))
+        self.assertEqual(result.errors[0].message, "Фактическое количество должно быть числом")
+
+    def test_validate_opening_inventory_import_blocks_unknown_references_and_duplicates(self):
+        from .imports import parse_opening_inventory_import_workbook, validate_opening_inventory_import_result
+
+        buffer = self._opening_inventory_workbook_upload(
+            [
+                ["missing", self.item.sku, 1, ""],
+                [self.warehouse.code, "missing-sku", 1, ""],
+                [self.warehouse.code, self.item.sku, 1, ""],
+                [self.warehouse.code, self.item.sku, 2, ""],
+            ]
+        )
+
+        result = parse_opening_inventory_import_workbook(buffer)
+        errors = validate_opening_inventory_import_result(result)
+
+        self.assertIn("Склад не найден", [error.message for error in errors])
+        self.assertIn("Артикул не найден", [error.message for error in errors])
+        self.assertIn("Артикул повторяется для склада в файле", [error.message for error in errors])
+
+    def test_commit_opening_inventory_import_creates_draft_full_inventory(self):
+        from .imports import commit_opening_inventory_import, parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload([[self.warehouse.code, self.item.sku, "5,5", "from file"]])
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        commit_result = commit_opening_inventory_import(result)
+
+        self.assertEqual(commit_result.errors, [])
+        self.assertEqual(commit_result.created_lines_count, 1)
+        inventory = commit_result.inventory
+        self.assertIsNotNone(inventory)
+        self.assertEqual(inventory.warehouse, self.warehouse)
+        self.assertEqual(inventory.scope, InventoryScope.FULL)
+        self.assertEqual(inventory.status, DocumentStatus.DRAFT)
+        self.assertIn("Импорт стартовых остатков", inventory.comment)
+        line = inventory.lines.get()
+        self.assertEqual(line.item, self.item)
+        self.assertEqual(line.actual_quantity, Decimal("5.5"))
+        self.assertEqual(line.expected_quantity, Decimal("0"))
+        self.assertEqual(line.comment, "from file")
+        self.assertEqual(StockDocument.objects.count(), 0)
+
+    def test_commit_opening_inventory_import_blocks_multiple_warehouses(self):
+        from .imports import commit_opening_inventory_import, parse_opening_inventory_import_workbook
+
+        other_warehouse = Warehouse.objects.create(code="reserve", name="Reserve")
+        buffer = self._opening_inventory_workbook_upload(
+            [
+                [self.warehouse.code, self.item.sku, 5, ""],
+                [other_warehouse.code, self.item.sku, 3, ""],
+            ]
+        )
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        commit_result = commit_opening_inventory_import(result)
+
+        self.assertEqual(commit_result.inventory, None)
+        self.assertEqual(commit_result.created_lines_count, 0)
+        self.assertIn("Один импорт должен относиться к одному складу", [error.message for error in commit_result.errors])
+        self.assertEqual(InventoryDocument.objects.count(), 0)
 
     def test_item_import_preview_requires_reference_manager(self):
         viewer = User.objects.create_user(username="viewer-import", password="pass")
@@ -380,6 +553,53 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Item.objects.filter(sku="SKU-VIEWER-COMMIT").exists())
+
+    def test_opening_inventory_import_preview_requires_stock_operator(self):
+        viewer = User.objects.create_user(username="viewer-opening-import", password="pass")
+        UserProfile.objects.create(user=viewer, role=UserRole.VIEWER)
+        self.client.force_login(viewer)
+
+        response = self.client.get("/inventories/import-opening/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_inventory_list_shows_opening_import_cta_for_operator(self):
+        operator = User.objects.create_user(username="operator-opening-import-cta", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+
+        response = self.client.get("/inventories/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Импорт стартовых остатков")
+        self.assertContains(response, "/inventories/import-opening/")
+
+    def test_opening_inventory_import_preview_renders_valid_rows_without_creating_inventory(self):
+        operator = User.objects.create_user(username="operator-opening-import", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+        workbook = self._opening_inventory_workbook_upload([[self.warehouse.code, self.item.sku, 7, "preview"]])
+
+        response = self.client.post("/inventories/import-opening/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Результат проверки")
+        self.assertContains(response, self.item.sku)
+        self.assertEqual(InventoryDocument.objects.count(), 0)
+
+    def test_opening_inventory_import_commit_redirects_to_draft_inventory(self):
+        operator = User.objects.create_user(username="operator-opening-import-commit", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+        workbook = self._opening_inventory_workbook_upload([[self.warehouse.code, self.item.sku, 7, "commit"]])
+
+        response = self.client.post("/inventories/import-opening/", {"action": "commit", "workbook": workbook})
+
+        inventory = InventoryDocument.objects.get()
+        self.assertRedirects(response, f"/inventories/{inventory.pk}/")
+        self.assertEqual(inventory.status, DocumentStatus.DRAFT)
+        self.assertEqual(inventory.scope, InventoryScope.FULL)
+        self.assertEqual(inventory.lines.count(), 1)
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(
@@ -1428,6 +1648,30 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual({row[1] for row in rows}, {transfer.number})
         self.assertNotIn(receipt.number, {row[1] for row in rows})
 
+    def test_movement_export_applies_draft_preset(self):
+        draft = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=draft, item=self.item, quantity=Decimal("5"))
+        posted = self._receipt(self.item, "3")
+
+        response = self.client.get("/export/movements.xlsx", {"preset": "drafts"})
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        metadata_sheet = workbook["Параметры"]
+        metadata = {
+            metadata_sheet.cell(row=row_number, column=1).value: metadata_sheet.cell(row=row_number, column=2).value
+            for row_number in range(2, metadata_sheet.max_row + 1)
+        }
+        self.assertEqual(metadata["Статус документа"], "Черновик")
+        rows = list(workbook["Движения"].iter_rows(min_row=2, values_only=True))
+        self.assertTrue(rows)
+        self.assertEqual({row[1] for row in rows}, {draft.number})
+        self.assertNotIn(posted.number, {row[1] for row in rows})
+
     def test_export_analysis_response_sets_download_filename(self):
         receipt = StockDocument.objects.create(
             document_type=StockDocumentType.RECEIPT,
@@ -1881,7 +2125,7 @@ class WarehouseFlowTests(TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "v0.2.0")
+        self.assertContains(response, APP_VERSION_LABEL)
 
     def test_brand_links_to_dashboard_and_empty_states_suggest_next_action(self):
         response = self.client.get("/")
@@ -2007,6 +2251,9 @@ class DemoModeTests(TestCase):
 
     @override_settings(DEMO_MODE=False)
     def test_demo_load_view_respects_setting(self):
+        admin = User.objects.create_superuser(username="demo-admin", password="pass")
+        self.client.force_login(admin)
+
         response = self.client.post("/demo/load/", {"next": "/"})
 
         self.assertEqual(response.status_code, 302)

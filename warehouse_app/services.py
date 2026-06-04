@@ -669,13 +669,12 @@ def build_monthly_ledger(
 
 
 def _posted_movement_lines(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
+    target_status = status or DocumentStatus.POSTED
     queryset = (
-        StockDocumentLine.objects.filter(document__status=DocumentStatus.POSTED)
+        StockDocumentLine.objects.filter(document__status=target_status)
         .select_related("document", "item", "item__unit", "document__warehouse", "document__destination_warehouse")
         .order_by("-document__operation_date", "-document__id", "id")
     )
-    if status and status != DocumentStatus.POSTED:
-        return queryset.none()
     if document_type:
         queryset = queryset.filter(document__document_type=document_type)
     if date_from is not None:

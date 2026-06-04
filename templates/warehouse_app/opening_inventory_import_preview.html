@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Импорт стартовых остатков{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Импорт</span>
+        <h2>Импорт стартовых остатков</h2>
+        <p>Загрузите Excel-файл, чтобы создать черновик полной инвентаризации. Остатки не записываются напрямую.</p>
+    </div>
+    <div class="page-actions">
+        <a class="button" href="{% url 'inventory_list' %}">Назад к инвентаризациям</a>
+    </div>
+</section>
+
+<section class="two-column wide-left">
+    <article class="card">
+        <h3>Файл для проверки</h3>
+        <form method="post" enctype="multipart/form-data" class="stack-form">
+            {% csrf_token %}
+            {{ form.non_field_errors }}
+            <div class="field">
+                <label for="{{ form.workbook.id_for_label }}">{{ form.workbook.label }}</label>
+                {{ form.workbook }}
+                {% if form.workbook.help_text %}<small>{{ form.workbook.help_text }}</small>{% endif %}
+                {{ form.workbook.errors }}
+            </div>
+            <button type="submit" name="action" value="preview" class="button primary">Проверить файл</button>
+        </form>
+    </article>
+
+    <article class="card">
+        <h3>Ожидаемые колонки</h3>
+        <dl class="meta-list">
+            <div>
+                <dt>Обязательные</dt>
+                <dd>Склад, Артикул, Фактическое количество</dd>
+            </div>
+            <div>
+                <dt>Дополнительные</dt>
+                <dd>Комментарий</dd>
+            </div>
+            <div>
+                <dt>Результат</dt>
+                <dd>Черновик полной инвентаризации для одного склада</dd>
+            </div>
+        </dl>
+        <p class="message">После импорта откройте черновик, проверьте строки и проведите инвентаризацию вручную.</p>
+    </article>
+</section>
+
+{% if has_preview %}
+    <section class="card">
+        <div class="section-head">
+            <h3>Результат проверки</h3>
+            <span class="muted">Строк: {{ result.rows|length }} · Ошибок: {{ result.errors|length }}</span>
+        </div>
+
+        {% if result.errors %}
+            <h4>Ошибки в строках</h4>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Строка</th>
+                            <th>Ошибка</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for error in result.errors %}
+                            <tr>
+                                <td>{{ error.row_number|default:"-" }}</td>
+                                <td>{{ error.message }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endif %}
+
+        {% if result.rows %}
+            <h4>Строки предпросмотра</h4>
+            <div class="table-wrap">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Строка</th>
+                            <th>Склад</th>
+                            <th>Артикул</th>
+                            <th>Факт</th>
+                            <th>Комментарий</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in result.rows %}
+                            <tr>
+                                <td>{{ row.row_number }}</td>
+                                <td>{{ row.warehouse_code|default:"-" }}</td>
+                                <td>{{ row.sku|default:"-" }}</td>
+                                <td>{{ row.actual_quantity }}</td>
+                                <td>{{ row.comment|default:"" }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% if can_commit %}
+                <form method="post" enctype="multipart/form-data" class="stack-form">
+                    {% csrf_token %}
+                    <div class="field">
+                        <label for="{{ form.workbook.id_for_label }}">Excel-файл для создания черновика</label>
+                        {{ form.workbook }}
+                        <small>Перед созданием черновика файл проверяется повторно. Выберите тот же файл.</small>
+                    </div>
+                    <button type="submit" name="action" value="commit" class="button primary">Создать черновик инвентаризации</button>
+                </form>
+            {% endif %}
+        {% endif %}
+
+        {% if not result.rows and not result.errors %}
+            <div class="empty-state-block">
+                <strong>Файл прочитан, но строк для предпросмотра нет.</strong>
+                <span>Проверьте, что после строки заголовков есть заполненные строки остатков.</span>
+            </div>
+        {% endif %}
+    </section>
+{% endif %}
+{% endblock %}

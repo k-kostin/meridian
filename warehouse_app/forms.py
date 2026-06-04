@@ -73,8 +73,24 @@ class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
         self._apply_field_styles()
 
     def clean_workbook(self):
-        workbook = self.cleaned_data["workbook"]
-        if not workbook.name.lower().endswith(".xlsx"):
+        workbook = self.cleaned_data.get("workbook")
+        if workbook and not workbook.name.lower().endswith(".xlsx"):
+            raise forms.ValidationError("Загрузите файл в формате .xlsx.")
+        return workbook
+
+
+class OpeningInventoryImportForm(StyledFieldsMixin, forms.Form):
+    workbook = forms.FileField(label="Excel-файл .xlsx")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["workbook"].help_text = "Ожидается лист «Стартовые остатки» или активный лист с нужными колонками."
+        self.fields["workbook"].widget.attrs["accept"] = ".xlsx"
+        self._apply_field_styles()
+
+    def clean_workbook(self):
+        workbook = self.cleaned_data.get("workbook")
+        if workbook and not workbook.name.lower().endswith(".xlsx"):
             raise forms.ValidationError("Загрузите файл в формате .xlsx.")
         return workbook
 
