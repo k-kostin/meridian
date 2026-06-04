@@ -216,11 +216,15 @@ def validate_items_import_result(result: ItemImportResult) -> list[ImportErrorDe
 def validate_opening_inventory_import_result(result: OpeningInventoryImportResult) -> list[ImportErrorDetail]:
     errors = list(result.errors)
     seen_pairs: set[tuple[str, str]] = set()
+    warehouse_codes = {row.warehouse_code for row in result.rows if row.warehouse_code}
+    skus = {row.sku for row in result.rows if row.sku}
+    existing_warehouse_codes = set(Warehouse.objects.filter(code__in=warehouse_codes).values_list("code", flat=True))
+    existing_skus = set(Item.objects.filter(sku__in=skus).values_list("sku", flat=True))
 
     for row in result.rows:
-        if row.warehouse_code and not Warehouse.objects.filter(code=row.warehouse_code).exists():
+        if row.warehouse_code and row.warehouse_code not in existing_warehouse_codes:
             errors.append(ImportErrorDetail(row_number=row.row_number, message="Склад не найден"))
-        if row.sku and not Item.objects.filter(sku=row.sku).exists():
+        if row.sku and row.sku not in existing_skus:
             errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден"))
         if row.warehouse_code and row.sku:
             pair = (row.warehouse_code, row.sku)
@@ -280,6 +284,7 @@ def commit_opening_inventory_import(result: OpeningInventoryImportResult) -> Ope
                     inventory=inventory,
                     item=items[row.sku],
                     actual_quantity=row.actual_quantity,
+                    comment=row.comment,
                 )
                 for row in result.rows
             ]

@@ -317,6 +317,7 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(line.item, self.item)
         self.assertEqual(line.actual_quantity, Decimal("5.5"))
         self.assertEqual(line.expected_quantity, Decimal("0"))
+        self.assertEqual(line.comment, "from file")
         self.assertEqual(StockDocument.objects.count(), 0)
 
     def test_commit_opening_inventory_import_blocks_multiple_warehouses(self):
