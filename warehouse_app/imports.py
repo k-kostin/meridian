@@ -66,10 +66,23 @@ REQUIRED_COLUMNS = {
     "Наименование": "Наименование обязательно",
     "Единица": "Единица обязательна",
 }
+ITEM_COLUMN_ALIASES = {
+    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры"],
+    "Наименование": ["Наименование", "Название", "Номенклатура"],
+    "Единица": ["Единица", "Ед.изм.", "Ед изм", "Единица измерения"],
+    "Активна": ["Активна", "Активен", "Действует"],
+    "Комментарий": ["Комментарий", "Примечание"],
+}
 OPENING_INVENTORY_REQUIRED_COLUMNS = {
     "Склад": "Склад обязателен",
     "Артикул": "Артикул обязателен",
     "Фактическое количество": "Фактическое количество обязательно",
+}
+OPENING_INVENTORY_COLUMN_ALIASES = {
+    "Склад": ["Склад", "Код склада", "Warehouse"],
+    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры"],
+    "Фактическое количество": ["Фактическое количество", "Количество", "Остаток", "Факт"],
+    "Комментарий": ["Комментарий", "Примечание"],
 }
 
 
@@ -109,6 +122,14 @@ def _cell(row, headers: dict[str, int], column: str) -> str:
     return _as_text(row[index])
 
 
+def _cell_with_aliases(row, headers: dict[str, int], column: str, aliases: dict[str, list[str]]) -> str:
+    for candidate in aliases.get(column, [column]):
+        value = _cell(row, headers, candidate)
+        if value:
+            return value
+    return ""
+
+
 def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
     workbook = load_workbook(file_obj, data_only=True, read_only=True)
     try:
@@ -125,12 +146,12 @@ def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
             if not any(values):
                 continue
 
-            sku = _cell(values, headers, "Артикул")
-            name = _cell(values, headers, "Наименование")
-            unit_code = _cell(values, headers, "Единица")
+            sku = _cell_with_aliases(values, headers, "Артикул", ITEM_COLUMN_ALIASES)
+            name = _cell_with_aliases(values, headers, "Наименование", ITEM_COLUMN_ALIASES)
+            unit_code = _cell_with_aliases(values, headers, "Единица", ITEM_COLUMN_ALIASES)
 
             for column, message in REQUIRED_COLUMNS.items():
-                if not _cell(values, headers, column):
+                if not _cell_with_aliases(values, headers, column, ITEM_COLUMN_ALIASES):
                     errors.append(ImportErrorDetail(row_number=row_number, message=message))
 
             rows.append(
@@ -139,8 +160,8 @@ def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
                     sku=sku,
                     name=name,
                     unit_code=unit_code,
-                    is_active=_as_bool(_cell(values, headers, "Активна")),
-                    comment=_cell(values, headers, "Комментарий"),
+                    is_active=_as_bool(_cell_with_aliases(values, headers, "Активна", ITEM_COLUMN_ALIASES)),
+                    comment=_cell_with_aliases(values, headers, "Комментарий", ITEM_COLUMN_ALIASES),
                 )
             )
 
@@ -165,13 +186,13 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
             if not any(values):
                 continue
 
-            warehouse_code = _cell(values, headers, "Склад")
-            sku = _cell(values, headers, "Артикул")
-            quantity_text = _cell(values, headers, "Фактическое количество")
+            warehouse_code = _cell_with_aliases(values, headers, "Склад", OPENING_INVENTORY_COLUMN_ALIASES)
+            sku = _cell_with_aliases(values, headers, "Артикул", OPENING_INVENTORY_COLUMN_ALIASES)
+            quantity_text = _cell_with_aliases(values, headers, "Фактическое количество", OPENING_INVENTORY_COLUMN_ALIASES)
             actual_quantity, quantity_ok = _as_decimal(quantity_text)
 
             for column, message in OPENING_INVENTORY_REQUIRED_COLUMNS.items():
-                if not _cell(values, headers, column):
+                if not _cell_with_aliases(values, headers, column, OPENING_INVENTORY_COLUMN_ALIASES):
                     errors.append(ImportErrorDetail(row_number=row_number, message=message))
 
             if quantity_text and not quantity_ok:
@@ -185,7 +206,7 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
                     warehouse_code=warehouse_code,
                     sku=sku,
                     actual_quantity=actual_quantity,
-                    comment=_cell(values, headers, "Комментарий"),
+                    comment=_cell_with_aliases(values, headers, "Комментарий", OPENING_INVENTORY_COLUMN_ALIASES),
                 )
             )
 
