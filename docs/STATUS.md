@@ -9,6 +9,8 @@
 - Stage A stabilization audit: passed on 2026-06-04.
 - Next development focus: Stage B operational contour.
 - UI/package version remains `v0.2.0` until an explicit release bump.
+- Planned next milestone bump: `v0.3.0` for Stage A closure after the version files and release note are updated.
+- Future milestone targets: `v0.4.0` for Stage B operational contour, `v0.5.0` for built-in analytics, `v0.6.0` for desktop packaging, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
 
 ## Что сейчас работает
