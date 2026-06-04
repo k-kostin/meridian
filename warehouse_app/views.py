@@ -25,7 +25,7 @@ from .forms import (
     UnitForm,
     WarehouseForm,
 )
-from .imports import parse_items_import_workbook
+from .imports import ItemImportResult, commit_items_import, parse_items_import_workbook, validate_items_import_result
 from .demo import has_business_data, seed_demo_data
 from .models import (
     DocumentStatus,
@@ -321,11 +321,21 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
     form = ItemImportPreviewForm(request.POST or None, request.FILES or None)
     result = None
     has_preview = False
+    validation_errors = []
+    action = request.POST.get("action", "preview")
 
     if request.method == "POST" and form.is_valid():
         try:
             result = parse_items_import_workbook(form.cleaned_data["workbook"])
+            validation_errors = validate_items_import_result(result)
+            result = ItemImportResult(rows=result.rows, errors=validation_errors)
             has_preview = True
+            if action == "commit":
+                commit_result = commit_items_import(result)
+                result = ItemImportResult(rows=result.rows, errors=commit_result.errors)
+                if not commit_result.errors:
+                    messages.success(request, f"Импортировано позиций: {commit_result.created_count}.")
+                    return redirect("item_list")
         except Exception:
             form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
 
@@ -336,6 +346,7 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
             "form": form,
             "result": result,
             "has_preview": has_preview,
+            "can_commit": bool(result and result.rows and not result.errors),
         },
     )
 

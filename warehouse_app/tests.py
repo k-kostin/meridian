@@ -257,7 +257,7 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "SKU-IMPORT-1")
         self.assertContains(response, "Импортная позиция")
         self.assertContains(response, "строка предпросмотра")
-        self.assertContains(response, "Изменения в справочник не внесены")
+        self.assertContains(response, "Импорт создает только новые позиции номенклатуры")
 
     def test_item_import_preview_renders_row_errors(self):
         admin = User.objects.create_user(username="admin-import-errors", password="pass")
@@ -292,6 +292,94 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(admin_response.status_code, 200)
         self.assertContains(admin_response, "Предпросмотр импорта")
+
+    def test_item_import_commit_creates_items_for_valid_workbook(self):
+        admin = User.objects.create_user(username="admin-import-commit", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [["SKU-COMMIT-1", "Новая импортная позиция", "kg", "да", "создано импортом"]]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertRedirects(response, "/items/")
+        item = Item.objects.get(sku="SKU-COMMIT-1")
+        self.assertEqual(item.name, "Новая импортная позиция")
+        self.assertEqual(item.unit, self.unit)
+        self.assertEqual(item.is_active, True)
+        self.assertEqual(item.notes, "создано импортом")
+
+    def test_item_import_commit_blocks_unknown_unit(self):
+        admin = User.objects.create_user(username="admin-import-unit", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [["SKU-COMMIT-2", "Позиция без единицы", "unknown", "да", ""]]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Item.objects.filter(sku="SKU-COMMIT-2").exists())
+        self.assertContains(response, "Единица не найдена")
+        self.assertContains(response, "SKU-COMMIT-2")
+
+    def test_item_import_commit_blocks_existing_sku(self):
+        admin = User.objects.create_user(username="admin-import-duplicate", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [[self.item.sku, "Дубль существующей позиции", "kg", "да", ""]]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Item.objects.filter(sku=self.item.sku).count(), 1)
+        self.assertContains(response, "Артикул уже существует")
+
+    def test_item_import_commit_blocks_duplicate_sku_in_workbook(self):
+        admin = User.objects.create_user(username="admin-import-file-duplicate", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [
+                ["SKU-DUP-FILE", "Первая строка", "kg", "да", ""],
+                ["SKU-DUP-FILE", "Вторая строка", "kg", "да", ""],
+            ]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Item.objects.filter(sku="SKU-DUP-FILE").exists())
+        self.assertContains(response, "Артикул повторяется в файле")
+
+    def test_item_import_commit_blocks_parser_errors(self):
+        admin = User.objects.create_user(username="admin-import-parser-errors", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload([["", "Без артикула", "kg", "да", ""]])
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Артикул обязателен")
+        self.assertEqual(Item.objects.filter(name="Без артикула").count(), 0)
+
+    def test_viewer_cannot_commit_item_import(self):
+        viewer = User.objects.create_user(username="viewer-import-commit", password="pass")
+        UserProfile.objects.create(user=viewer, role=UserRole.VIEWER)
+        self.client.force_login(viewer)
+        workbook = self._import_workbook_upload(
+            [["SKU-VIEWER-COMMIT", "Запрещенная позиция", "kg", "да", ""]]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Item.objects.filter(sku="SKU-VIEWER-COMMIT").exists())
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(
