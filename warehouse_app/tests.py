@@ -267,11 +267,27 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].sku, "SKU-003")
         self.assertEqual(result.rows[0].is_active, False)
 
-    def _import_workbook_upload(self, rows):
+    def test_parse_items_import_workbook_uses_resolved_alias_column_consistently(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["Артикул", "Код", "Наименование", "Единица"])
+        sheet.append(["", "FALLBACK-SKU", "Позиция с пустым артикулом", "pcs"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(result.rows[0].sku, "")
+        self.assertIn("Артикул обязателен", [error.message for error in result.errors])
+
+    def _import_workbook_upload(self, rows, headers=None):
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = "Номенклатура"
-        sheet.append(["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
+        sheet.append(headers or ["Артикул", "Наименование", "Единица", "Активна", "Комментарий"])
         for row in rows:
             sheet.append(row)
         buffer = BytesIO()
@@ -280,11 +296,11 @@ class WarehouseFlowTests(TestCase):
         buffer.name = "items.xlsx"
         return buffer
 
-    def _opening_inventory_workbook_upload(self, rows, sheet_name="Стартовые остатки"):
+    def _opening_inventory_workbook_upload(self, rows, sheet_name="Стартовые остатки", headers=None):
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = sheet_name
-        sheet.append(["Склад", "Артикул", "Фактическое количество", "Комментарий"])
+        sheet.append(headers or ["Склад", "Артикул", "Фактическое количество", "Комментарий"])
         for row in rows:
             sheet.append(row)
         buffer = BytesIO()
@@ -334,6 +350,19 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(len(result.rows), 1)
         self.assertEqual(result.rows[0].actual_quantity, Decimal("0"))
         self.assertEqual(result.errors[0].message, "Фактическое количество должно быть числом")
+
+    def test_parse_opening_inventory_import_workbook_uses_resolved_alias_column_consistently(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        buffer = self._opening_inventory_workbook_upload(
+            [[self.warehouse.code, "", "FALLBACK-SKU", "12", "остаток"]],
+            headers=["Склад", "Артикул", "SKU", "Фактическое количество", "Комментарий"],
+        )
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(result.rows[0].sku, "")
+        self.assertIn("Артикул обязателен", [error.message for error in result.errors])
 
     def test_validate_opening_inventory_import_blocks_unknown_references_and_duplicates(self):
         from .imports import parse_opening_inventory_import_workbook, validate_opening_inventory_import_result
@@ -431,6 +460,22 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "Импортная позиция")
         self.assertContains(response, "строка предпросмотра")
         self.assertContains(response, "Импорт создает только новые позиции номенклатуры")
+
+    def test_item_import_accepts_common_column_aliases(self):
+        admin = User.objects.create_user(username="alias-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload(
+            [["ALIAS-001", "Позиция с алиасами", self.unit.code, "да", "алиас"]],
+            headers=["SKU", "Название", "Ед.изм.", "Действует", "Примечание"],
+        )
+
+        response = self.client.post("/items/import/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ALIAS-001")
+        self.assertNotContains(response, "Единица обязательна")
 
     def test_item_import_preview_renders_row_errors(self):
         admin = User.objects.create_user(username="admin-import-errors", password="pass")
@@ -586,6 +631,22 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "Результат проверки")
         self.assertContains(response, self.item.sku)
         self.assertEqual(InventoryDocument.objects.count(), 0)
+
+    def test_opening_inventory_import_accepts_common_column_aliases(self):
+        operator = User.objects.create_user(username="opening-alias-operator", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+
+        workbook = self._opening_inventory_workbook_upload(
+            [[self.warehouse.code, self.item.sku, "12", "остаток"]],
+            headers=["Код склада", "SKU", "Остаток", "Примечание"],
+        )
+
+        response = self.client.post("/inventories/import-opening/", {"workbook": workbook})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.item.sku)
+        self.assertNotContains(response, "Фактическое количество обязательно")
 
     def test_opening_inventory_import_commit_redirects_to_draft_inventory(self):
         operator = User.objects.create_user(username="operator-opening-import-commit", password="pass")
