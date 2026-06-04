@@ -19,7 +19,17 @@
 </section>
 
 <section class="card">
+    <nav class="quick-filters" aria-label="Быстрые фильтры документов">
+        <a class="chip{% if selected_preset == 'drafts' %} active{% endif %}" href="?preset=drafts">Черновики</a>
+        <a class="chip{% if selected_preset == 'posted' %} active{% endif %}" href="?preset=posted">Проведенные</a>
+        <a class="chip{% if selected_preset == 'receipts' %} active{% endif %}" href="?preset=receipts">Приходы</a>
+        <a class="chip{% if selected_preset == 'issues' %} active{% endif %}" href="?preset=issues">Расходы</a>
+        <a class="chip{% if selected_preset == 'transfers' %} active{% endif %}" href="?preset=transfers">Перемещения</a>
+    </nav>
     <form method="get" class="inline-filters" data-enhanced-filters="1">
+        {% if selected_preset %}
+            <input type="hidden" name="preset" value="{{ selected_preset }}">
+        {% endif %}
         <input type="search" name="q" value="{{ query }}" placeholder="Номер, склад, комментарий или номенклатура" class="search-input">
         <input type="date" name="date_from" value="{{ selected_date_from }}" class="date-input" data-autoblur-date="1">
         <input type="date" name="date_to" value="{{ selected_date_to }}" class="date-input" data-autoblur-date="1">

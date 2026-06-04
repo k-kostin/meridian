@@ -67,6 +67,35 @@ PERIOD_MODE_LABELS = {
     "custom": "Период",
 }
 PAGE_SIZE_OPTIONS = (10, 25, 50, 100)
+DOCUMENT_PRESETS = {
+    "drafts": {"status": DocumentStatus.DRAFT},
+    "posted": {"status": DocumentStatus.POSTED},
+    "receipts": {"document_type": StockDocumentType.RECEIPT},
+    "issues": {"document_type": StockDocumentType.ISSUE},
+    "transfers": {"document_type": StockDocumentType.TRANSFER},
+}
+BALANCE_PRESETS = {
+    "by_warehouse": {"presentation": PRESENTATION_BY_WAREHOUSE},
+    "consolidated": {"presentation": PRESENTATION_CONSOLIDATED},
+    "with_zero": {"include_zero": "1"},
+    "nonzero": {"include_zero": ""},
+}
+
+
+def _preset_value(request: HttpRequest, key: str, preset_filters: dict[str, str]) -> str:
+    if key in request.GET:
+        return request.GET.get(key, "")
+    return preset_filters.get(key, "")
+
+
+def _document_preset_filters(request: HttpRequest) -> tuple[str, dict[str, str]]:
+    preset = request.GET.get("preset", "")
+    return preset, DOCUMENT_PRESETS.get(preset, {})
+
+
+def _balance_preset_filters(request: HttpRequest) -> tuple[str, dict[str, str]]:
+    preset = request.GET.get("preset", "")
+    return preset, BALANCE_PRESETS.get(preset, {})
 
 
 def healthz(request: HttpRequest) -> JsonResponse:
@@ -111,6 +140,14 @@ def _query_string_for_keys(request: HttpRequest, *keys: str) -> str:
         value = request.GET.get(key)
         if value not in ("", None):
             params.append((key, value))
+    return urlencode(params)
+
+
+def _query_string_for_keys_preserve_empty(request: HttpRequest, *keys: str) -> str:
+    params = []
+    for key in keys:
+        if key in request.GET:
+            params.append((key, request.GET.get(key, "")))
     return urlencode(params)
 
 
@@ -285,8 +322,9 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
 def document_list(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse")
-    document_type = request.GET.get("document_type")
-    status = request.GET.get("status")
+    preset, preset_filters = _document_preset_filters(request)
+    document_type = _preset_value(request, "document_type", preset_filters)
+    status = _preset_value(request, "status", preset_filters)
     date_from = parse_date(request.GET.get("date_from", "")) if request.GET.get("date_from") else None
     date_to = parse_date(request.GET.get("date_to", "")) if request.GET.get("date_to") else None
     if date_from and date_to and date_from > date_to:
@@ -330,9 +368,18 @@ def document_list(request: HttpRequest) -> HttpResponse:
         "selected_warehouse": warehouse_id or "",
         "selected_type": document_type or "",
         "selected_status": status or "",
+        "selected_preset": preset if preset in DOCUMENT_PRESETS else "",
         "selected_date_from": date_from.isoformat() if date_from else "",
         "selected_date_to": date_to.isoformat() if date_to else "",
-        "movements_query_string": _query_string_for_keys(request, "warehouse", "date_from", "date_to"),
+        "movements_query_string": _query_string_for_keys_preserve_empty(
+            request,
+            "preset",
+            "warehouse",
+            "document_type",
+            "status",
+            "date_from",
+            "date_to",
+        ),
         "document_types": StockDocumentType.choices,
         "statuses": DocumentStatus.choices,
     }
@@ -563,9 +610,15 @@ def inventory_post(request: HttpRequest, pk: int) -> HttpResponse:
 def balance_report(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse")
-    include_zero = request.GET.get("include_zero") == "1"
+    preset, preset_filters = _balance_preset_filters(request)
+    include_zero_value = request.GET.get("include_zero")
+    include_zero = (
+        include_zero_value == "1"
+        if include_zero_value is not None
+        else preset_filters.get("include_zero") == "1"
+    )
     presentation = normalize_presentation(
-        request.GET.get("presentation"),
+        request.GET.get("presentation") or preset_filters.get("presentation"),
         default=PRESENTATION_BY_WAREHOUSE,
     )
     warehouse = Warehouse.objects.filter(pk=warehouse_id).first() if warehouse_id else None
@@ -586,6 +639,7 @@ def balance_report(request: HttpRequest) -> HttpResponse:
         "selected_warehouse": warehouse_id or "",
         "selected_presentation": presentation,
         "selected_include_zero": include_zero,
+        "selected_preset": preset if preset in BALANCE_PRESETS else "",
     }
     return render(request, "warehouse_app/balances.html", context)
 
@@ -734,9 +788,15 @@ def export_items(request: HttpRequest) -> HttpResponse:
 def export_balances(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse")
-    include_zero = request.GET.get("include_zero") == "1"
+    _, preset_filters = _balance_preset_filters(request)
+    include_zero_value = request.GET.get("include_zero")
+    include_zero = (
+        include_zero_value == "1"
+        if include_zero_value is not None
+        else preset_filters.get("include_zero") == "1"
+    )
     presentation = normalize_presentation(
-        request.GET.get("presentation"),
+        request.GET.get("presentation") or preset_filters.get("presentation"),
         default=PRESENTATION_BY_WAREHOUSE,
     )
     warehouse = Warehouse.objects.filter(pk=warehouse_id).first() if warehouse_id else None
@@ -772,11 +832,22 @@ def export_daily_ledger(request: HttpRequest) -> HttpResponse:
 def export_movements(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
     warehouse = Warehouse.objects.filter(pk=warehouse_id).first() if warehouse_id else None
+    _, preset_filters = _document_preset_filters(request)
+    document_type = _preset_value(request, "document_type", preset_filters)
+    status = _preset_value(request, "status", preset_filters)
     date_from = parse_date(request.GET.get("date_from", "")) if request.GET.get("date_from") else None
     date_to = parse_date(request.GET.get("date_to", "")) if request.GET.get("date_to") else None
     if date_from and date_to and date_from > date_to:
         date_from, date_to = date_to, date_from
-    return _workbook_response(export_movements_xlsx(warehouse=warehouse, date_from=date_from, date_to=date_to))
+    return _workbook_response(
+        export_movements_xlsx(
+            warehouse=warehouse,
+            date_from=date_from,
+            date_to=date_to,
+            document_type=document_type,
+            status=status,
+        )
+    )
 
 
 def export_inventories(request: HttpRequest) -> HttpResponse:

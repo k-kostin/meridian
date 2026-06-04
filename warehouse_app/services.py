@@ -668,12 +668,16 @@ def build_monthly_ledger(
     }
 
 
-def _posted_movement_lines(warehouse=None, date_from=None, date_to=None):
+def _posted_movement_lines(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
     queryset = (
         StockDocumentLine.objects.filter(document__status=DocumentStatus.POSTED)
         .select_related("document", "item", "item__unit", "document__warehouse", "document__destination_warehouse")
         .order_by("-document__operation_date", "-document__id", "id")
     )
+    if status and status != DocumentStatus.POSTED:
+        return queryset.none()
+    if document_type:
+        queryset = queryset.filter(document__document_type=document_type)
     if date_from is not None:
         queryset = queryset.filter(document__operation_date__gte=date_from)
     if date_to is not None:
@@ -702,9 +706,9 @@ def _movement_event(line: StockDocumentLine, warehouse, quantity: Decimal):
     )
 
 
-def get_movement_rows(warehouse=None, date_from=None, date_to=None):
+def get_movement_rows(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
     events = []
-    for line in _posted_movement_lines(date_from=date_from, date_to=date_to):
+    for line in _posted_movement_lines(date_from=date_from, date_to=date_to, document_type=document_type, status=status):
         if line.document.document_type == StockDocumentType.TRANSFER:
             source_quantity = -abs(line.quantity)
             destination_quantity = abs(line.quantity)
@@ -928,8 +932,16 @@ def export_balances_xlsx(warehouse=None, presentation=PRESENTATION_BY_WAREHOUSE,
     return _workbook_export(workbook, "balances.xlsx")
 
 
-def export_movements_xlsx(warehouse=None, date_from=None, date_to=None):
-    lines = list(get_movement_rows(warehouse=warehouse, date_from=date_from, date_to=date_to))
+def export_movements_xlsx(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
+    lines = list(
+        get_movement_rows(
+            warehouse=warehouse,
+            date_from=date_from,
+            date_to=date_to,
+            document_type=document_type,
+            status=status,
+        )
+    )
     workbook = Workbook()
     sheet = workbook.active
     _format_sheet(sheet, "Движения")
@@ -939,6 +951,8 @@ def export_movements_xlsx(warehouse=None, date_from=None, date_to=None):
             ("Отчет", "Движения"),
             ("Сформировано", timezone.localtime()),
             ("Фильтр по складу", _warehouse_label(warehouse)),
+            ("Тип документа", dict(StockDocumentType.choices).get(document_type, "Все типы") if document_type else "Все типы"),
+            ("Статус документа", dict(DocumentStatus.choices).get(status, "Все статусы") if status else "Все статусы"),
             ("Дата от", date_from),
             ("Дата до", date_to),
             ("Строк движений", len(lines)),

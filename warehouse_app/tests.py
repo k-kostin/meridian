@@ -1,3 +1,4 @@
+from io import BytesIO
 from datetime import date
 from decimal import Decimal
 from django.core.exceptions import ValidationError
@@ -883,6 +884,66 @@ class WarehouseFlowTests(TestCase):
         rows = list(response.context["balances"].object_list)
         self.assertTrue(any(row["item__sku"] == "ZERO-001" for row in rows))
 
+    def test_balances_preset_consolidated_switches_presentation(self):
+        response = self.client.get("/balances/", {"preset": "consolidated"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "consolidated")
+        self.assertEqual(response.context["selected_presentation"], PRESENTATION_CONSOLIDATED)
+        self.assertFalse(response.context["selected_include_zero"])
+
+    def test_balances_preset_with_zero_includes_empty_catalog_items(self):
+        Item.objects.create(sku="ZERO-002", name="Пустая позиция", unit=self.unit, is_active=False)
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("5"))
+        receipt.post()
+
+        response = self.client.get("/balances/", {"preset": "with_zero"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "with_zero")
+        self.assertTrue(response.context["selected_include_zero"])
+        rows = list(response.context["balances"].object_list)
+        self.assertTrue(any(row["item__sku"] == "ZERO-002" for row in rows))
+
+    def test_balance_report_shows_builtin_preset_chips(self):
+        response = self.client.get("/balances/", {"preset": "nonzero"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="?preset=by_warehouse"', html=False)
+        self.assertContains(response, 'href="?preset=consolidated"', html=False)
+        self.assertContains(response, 'href="?preset=with_zero"', html=False)
+        self.assertContains(response, 'href="?preset=nonzero"', html=False)
+        self.assertContains(response, "По складам")
+        self.assertContains(response, "Сводно")
+        self.assertContains(response, "Все позиции")
+        self.assertContains(response, "Только с остатком")
+        self.assertContains(response, 'class="chip active"', html=False)
+        self.assertContains(response, 'name="preset" value="nonzero"', html=False)
+
+    def test_balance_preset_can_be_overridden_by_unchecked_include_zero(self):
+        response = self.client.get("/balances/", {"preset": "with_zero", "include_zero": ""})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "with_zero")
+        self.assertFalse(response.context["selected_include_zero"])
+
+    def test_balance_export_applies_preset_defaults(self):
+        response = self.client.get("/export/balances.xlsx", {"preset": "consolidated"})
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        metadata_sheet = workbook["Параметры"]
+        metadata = {
+            metadata_sheet.cell(row=row_number, column=1).value: metadata_sheet.cell(row=row_number, column=2).value
+            for row_number in range(2, metadata_sheet.max_row + 1)
+        }
+        self.assertEqual(metadata["Представление"], "Сводно по складам")
+
     def test_item_list_paginates_large_nomenclature(self):
         for index in range(30):
             Item.objects.create(sku=f"S-{index:03d}", name=f"Позиция {index:03d}", unit=self.unit)
@@ -926,6 +987,118 @@ class WarehouseFlowTests(TestCase):
             response.context["movements_query_string"],
             f"warehouse={self.warehouse.pk}&date_from=2026-03-05&date_to=2026-03-31",
         )
+
+    def test_documents_preset_drafts_filters_draft_documents(self):
+        draft = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=draft, item=self.item, quantity=Decimal("5"))
+        posted = self._receipt(self.item, "3")
+
+        response = self.client.get("/documents/", {"preset": "drafts"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "drafts")
+        self.assertEqual(response.context["selected_status"], DocumentStatus.DRAFT)
+        documents = list(response.context["documents"].object_list)
+        self.assertIn(draft, documents)
+        self.assertNotIn(posted, documents)
+
+    def test_documents_preset_transfers_filters_transfer_documents(self):
+        destination = Warehouse.objects.create(code="reserve", name="Резервный склад")
+        transfer = StockDocument.objects.create(
+            document_type=StockDocumentType.TRANSFER,
+            warehouse=self.warehouse,
+            destination_warehouse=destination,
+            operation_date=timezone.localdate(),
+        )
+        StockDocumentLine.objects.create(document=transfer, item=self.item, quantity=Decimal("2"))
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 5),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("5"))
+
+        response = self.client.get("/documents/", {"preset": "transfers"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "transfers")
+        self.assertEqual(response.context["selected_type"], StockDocumentType.TRANSFER)
+        documents = list(response.context["documents"].object_list)
+        self.assertIn(transfer, documents)
+        self.assertNotIn(receipt, documents)
+
+    def test_document_list_shows_builtin_preset_chips(self):
+        response = self.client.get("/documents/", {"preset": "drafts"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'href="?preset=drafts"', html=False)
+        self.assertContains(response, 'href="?preset=posted"', html=False)
+        self.assertContains(response, 'href="?preset=receipts"', html=False)
+        self.assertContains(response, 'href="?preset=issues"', html=False)
+        self.assertContains(response, 'href="?preset=transfers"', html=False)
+        self.assertContains(response, "Черновики")
+        self.assertContains(response, "Проведенные")
+        self.assertContains(response, "Приходы")
+        self.assertContains(response, "Расходы")
+        self.assertContains(response, "Перемещения")
+        self.assertContains(response, 'class="chip active"', html=False)
+        self.assertContains(response, 'name="preset" value="drafts"', html=False)
+
+    def test_document_preset_allows_explicit_empty_status_override(self):
+        draft = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=draft, item=self.item, quantity=Decimal("5"))
+        posted = self._receipt(self.item, "3")
+
+        response = self.client.get("/documents/", {"preset": "drafts", "status": ""})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_preset"], "drafts")
+        self.assertEqual(response.context["selected_status"], "")
+        documents = list(response.context["documents"].object_list)
+        self.assertIn(draft, documents)
+        self.assertIn(posted, documents)
+
+    def test_document_export_link_preserves_explicit_empty_preset_override(self):
+        response = self.client.get("/documents/", {"preset": "drafts", "status": ""})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["movements_query_string"], "preset=drafts&status=")
+        self.assertContains(response, "/export/movements.xlsx?preset=drafts&amp;status=", html=False)
+
+    def test_movement_export_applies_transfer_preset(self):
+        receipt = self._receipt(self.item, "5")
+        destination = Warehouse.objects.create(code="reserve", name="Резервный склад")
+        transfer = StockDocument.objects.create(
+            document_type=StockDocumentType.TRANSFER,
+            warehouse=self.warehouse,
+            destination_warehouse=destination,
+            operation_date=timezone.localdate(),
+        )
+        StockDocumentLine.objects.create(document=transfer, item=self.item, quantity=Decimal("2"))
+        transfer.post()
+
+        response = self.client.get("/export/movements.xlsx", {"preset": "transfers"})
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        metadata_sheet = workbook["Параметры"]
+        metadata = {
+            metadata_sheet.cell(row=row_number, column=1).value: metadata_sheet.cell(row=row_number, column=2).value
+            for row_number in range(2, metadata_sheet.max_row + 1)
+        }
+        self.assertEqual(metadata["Тип документа"], "Перемещение")
+        rows = list(workbook["Движения"].iter_rows(min_row=2, values_only=True))
+        self.assertTrue(rows)
+        self.assertEqual({row[1] for row in rows}, {transfer.number})
+        self.assertNotIn(receipt.number, {row[1] for row in rows})
 
     def test_export_analysis_response_sets_download_filename(self):
         receipt = StockDocument.objects.create(
