@@ -83,7 +83,7 @@ def _as_text(value) -> str:
 
 def _as_bool(value) -> bool:
     text = _as_text(value).lower()
-    if text in {"нет", "no", "false", "0"}:
+    if text in {"нет", "no", "false", "0", "выкл", "off", "disabled"}:
         return False
     return True
 
@@ -99,11 +99,11 @@ def _as_decimal(value) -> tuple[Decimal, bool]:
 
 
 def _header_map(header_row) -> dict[str, int]:
-    return {_as_text(value): index for index, value in enumerate(header_row)}
+    return {_as_text(value).lower(): index for index, value in enumerate(header_row)}
 
 
 def _cell(row, headers: dict[str, int], column: str) -> str:
-    index = headers.get(column)
+    index = headers.get(column.lower())
     if index is None or index >= len(row):
         return ""
     return _as_text(row[index])
@@ -125,12 +125,12 @@ def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
             if not any(values):
                 continue
 
-            sku = _cell(raw_row, headers, "Артикул")
-            name = _cell(raw_row, headers, "Наименование")
-            unit_code = _cell(raw_row, headers, "Единица")
+            sku = _cell(values, headers, "Артикул")
+            name = _cell(values, headers, "Наименование")
+            unit_code = _cell(values, headers, "Единица")
 
             for column, message in REQUIRED_COLUMNS.items():
-                if not _cell(raw_row, headers, column):
+                if not _cell(values, headers, column):
                     errors.append(ImportErrorDetail(row_number=row_number, message=message))
 
             rows.append(
@@ -139,8 +139,8 @@ def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
                     sku=sku,
                     name=name,
                     unit_code=unit_code,
-                    is_active=_as_bool(_cell(raw_row, headers, "Активна")),
-                    comment=_cell(raw_row, headers, "Комментарий"),
+                    is_active=_as_bool(_cell(values, headers, "Активна")),
+                    comment=_cell(values, headers, "Комментарий"),
                 )
             )
 
@@ -165,13 +165,13 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
             if not any(values):
                 continue
 
-            warehouse_code = _cell(raw_row, headers, "Склад")
-            sku = _cell(raw_row, headers, "Артикул")
-            quantity_text = _cell(raw_row, headers, "Фактическое количество")
+            warehouse_code = _cell(values, headers, "Склад")
+            sku = _cell(values, headers, "Артикул")
+            quantity_text = _cell(values, headers, "Фактическое количество")
             actual_quantity, quantity_ok = _as_decimal(quantity_text)
 
             for column, message in OPENING_INVENTORY_REQUIRED_COLUMNS.items():
-                if not _cell(raw_row, headers, column):
+                if not _cell(values, headers, column):
                     errors.append(ImportErrorDetail(row_number=row_number, message=message))
 
             if quantity_text and not quantity_ok:
@@ -185,7 +185,7 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
                     warehouse_code=warehouse_code,
                     sku=sku,
                     actual_quantity=actual_quantity,
-                    comment=_cell(raw_row, headers, "Комментарий"),
+                    comment=_cell(values, headers, "Комментарий"),
                 )
             )
 
@@ -197,6 +197,10 @@ def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInvent
 def validate_items_import_result(result: ItemImportResult) -> list[ImportErrorDetail]:
     errors = list(result.errors)
     seen_skus: set[str] = set()
+    skus = {row.sku for row in result.rows if row.sku}
+    unit_codes = {row.unit_code for row in result.rows if row.unit_code}
+    existing_skus = set(Item.objects.filter(sku__in=skus).values_list("sku", flat=True))
+    existing_unit_codes = set(Unit.objects.filter(code__in=unit_codes).values_list("code", flat=True))
 
     for row in result.rows:
         if row.sku:
@@ -204,10 +208,10 @@ def validate_items_import_result(result: ItemImportResult) -> list[ImportErrorDe
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул повторяется в файле"))
             else:
                 seen_skus.add(row.sku)
-            if Item.objects.filter(sku=row.sku).exists():
+            if row.sku in existing_skus:
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул уже существует"))
 
-        if row.unit_code and not Unit.objects.filter(code=row.unit_code).exists():
+        if row.unit_code and row.unit_code not in existing_unit_codes:
             errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
 
     return errors
@@ -242,15 +246,18 @@ def commit_items_import(result: ItemImportResult) -> ItemImportCommitResult:
         return ItemImportCommitResult(created_count=0, errors=errors)
 
     units = Unit.objects.in_bulk([row.unit_code for row in result.rows], field_name="code")
+    items = [
+        Item(
+            sku=row.sku,
+            name=row.name,
+            unit=units[row.unit_code],
+            is_active=row.is_active,
+            notes=row.comment,
+        )
+        for row in result.rows
+    ]
     with transaction.atomic():
-        for row in result.rows:
-            Item.objects.create(
-                sku=row.sku,
-                name=row.name,
-                unit=units[row.unit_code],
-                is_active=row.is_active,
-                notes=row.comment,
-            )
+        Item.objects.bulk_create(items)
 
     return ItemImportCommitResult(created_count=len(result.rows), errors=[])
 

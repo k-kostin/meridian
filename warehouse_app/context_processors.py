@@ -7,7 +7,7 @@ from .version import APP_VERSION_LABEL
 
 def app_context(request):
     role = get_user_role(request.user)
-    role_display = role_label(role) if request.user.is_authenticated else "Локальный режим"
+    role_display = role_label(role) if request.user.is_authenticated else ("Локальный режим" if settings.DEMO_MODE else "Гость")
     return {
         "app_demo_mode": settings.DEMO_MODE,
         "app_has_core_data": has_business_data() if settings.DEMO_MODE else False,

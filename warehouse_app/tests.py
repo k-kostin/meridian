@@ -9,6 +9,7 @@ from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
 from .demo import seed_demo_data
+from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
     ActivityEventType,
@@ -43,6 +44,7 @@ from .services import (
 )
 
 
+@override_settings(DEMO_MODE=True)
 class WarehouseFlowTests(TestCase):
     def setUp(self):
         self.unit = Unit.objects.create(code="kg", name="Килограмм")
@@ -74,10 +76,48 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
+    @override_settings(DEMO_MODE=True)
     def test_anonymous_local_user_keeps_current_document_create_flow(self):
         response = self.client.get("/documents/new/")
 
         self.assertEqual(response.status_code, 200)
+
+    @override_settings(DEMO_MODE=False)
+    def test_anonymous_production_user_cannot_open_document_create(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(DEMO_MODE=False)
+    def test_anonymous_production_user_sees_guest_role_label(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Гость")
+        self.assertNotContains(response, "Локальный режим")
+
+    @override_settings(DEMO_MODE=True)
+    def test_anonymous_demo_user_keeps_current_document_create_flow(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_superuser_gets_admin_role(self):
+        user = User.objects.create_superuser(username="root", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get("/items/import/")
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_authenticated_user_without_profile_does_not_create_profile_on_read(self):
+        user = User.objects.create_user(username="no-profile", password="pass")
+        self.client.force_login(user)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserProfile.objects.filter(user=user).exists())
 
     def test_viewer_cannot_post_document(self):
         document = StockDocument.objects.create(
@@ -209,6 +249,23 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].sku, "SKU-002")
         self.assertEqual(result.rows[0].is_active, True)
         self.assertEqual(result.errors, [])
+
+    def test_parse_items_import_workbook_accepts_case_insensitive_headers_and_common_false_values(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(["артикул", "НАИМЕНОВАНИЕ", "единица", "активна", "комментарий"])
+        sheet.append(["SKU-003", "Третья позиция", "kg", "off", ""])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.rows[0].sku, "SKU-003")
+        self.assertEqual(result.rows[0].is_active, False)
 
     def _import_workbook_upload(self, rows):
         workbook = Workbook()
@@ -1591,6 +1648,30 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual({row[1] for row in rows}, {transfer.number})
         self.assertNotIn(receipt.number, {row[1] for row in rows})
 
+    def test_movement_export_applies_draft_preset(self):
+        draft = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=draft, item=self.item, quantity=Decimal("5"))
+        posted = self._receipt(self.item, "3")
+
+        response = self.client.get("/export/movements.xlsx", {"preset": "drafts"})
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        metadata_sheet = workbook["Параметры"]
+        metadata = {
+            metadata_sheet.cell(row=row_number, column=1).value: metadata_sheet.cell(row=row_number, column=2).value
+            for row_number in range(2, metadata_sheet.max_row + 1)
+        }
+        self.assertEqual(metadata["Статус документа"], "Черновик")
+        rows = list(workbook["Движения"].iter_rows(min_row=2, values_only=True))
+        self.assertTrue(rows)
+        self.assertEqual({row[1] for row in rows}, {draft.number})
+        self.assertNotIn(posted.number, {row[1] for row in rows})
+
     def test_export_analysis_response_sets_download_filename(self):
         receipt = StockDocument.objects.create(
             document_type=StockDocumentType.RECEIPT,
@@ -2044,7 +2125,7 @@ class WarehouseFlowTests(TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "v0.2.0")
+        self.assertContains(response, APP_VERSION_LABEL)
 
     def test_brand_links_to_dashboard_and_empty_states_suggest_next_action(self):
         response = self.client.get("/")
@@ -2170,6 +2251,9 @@ class DemoModeTests(TestCase):
 
     @override_settings(DEMO_MODE=False)
     def test_demo_load_view_respects_setting(self):
+        admin = User.objects.create_superuser(username="demo-admin", password="pass")
+        self.client.force_login(admin)
+
         response = self.client.post("/demo/load/", {"next": "/"})
 
         self.assertEqual(response.status_code, 302)

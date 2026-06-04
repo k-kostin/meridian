@@ -73,8 +73,8 @@ class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
         self._apply_field_styles()
 
     def clean_workbook(self):
-        workbook = self.cleaned_data["workbook"]
-        if not workbook.name.lower().endswith(".xlsx"):
+        workbook = self.cleaned_data.get("workbook")
+        if workbook and not workbook.name.lower().endswith(".xlsx"):
             raise forms.ValidationError("Загрузите файл в формате .xlsx.")
         return workbook
 
@@ -89,8 +89,8 @@ class OpeningInventoryImportForm(StyledFieldsMixin, forms.Form):
         self._apply_field_styles()
 
     def clean_workbook(self):
-        workbook = self.cleaned_data["workbook"]
-        if not workbook.name.lower().endswith(".xlsx"):
+        workbook = self.cleaned_data.get("workbook")
+        if workbook and not workbook.name.lower().endswith(".xlsx"):
             raise forms.ValidationError("Загрузите файл в формате .xlsx.")
         return workbook
 

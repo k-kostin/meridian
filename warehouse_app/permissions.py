@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import wraps
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest
 
@@ -10,9 +11,17 @@ from .models import UserProfile, UserRole
 
 def get_user_role(user) -> str:
     if not user.is_authenticated:
+        return UserRole.ADMIN if settings.DEMO_MODE else UserRole.VIEWER
+    if user.is_superuser:
         return UserRole.ADMIN
-    profile, _ = UserProfile.objects.get_or_create(user=user)
-    return profile.role
+    if hasattr(user, "_cached_warehouse_role"):
+        return user._cached_warehouse_role
+    try:
+        role = user.warehouse_profile.role
+    except UserProfile.DoesNotExist:
+        role = UserRole.OPERATOR
+    user._cached_warehouse_role = role
+    return role
 
 
 def role_label(role: str) -> str:
