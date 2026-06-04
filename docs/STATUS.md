@@ -5,11 +5,10 @@
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Current development state: Stage A stabilization slices through opening inventory import are merged on `main`.
+- Current development state: Stage A stabilization is closed and released as `v0.3.0`.
 - Stage A stabilization audit: passed on 2026-06-04.
 - Next development focus: Stage B operational contour.
-- UI/package version remains `v0.2.0` until an explicit release bump.
-- Planned next milestone bump: `v0.3.0` for Stage A closure after the version files and release note are updated.
+- UI/package version: `v0.3.0`.
 - Future milestone targets: `v0.4.0` for Stage B operational contour, `v0.5.0` for built-in analytics, `v0.6.0` for desktop packaging, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
 
@@ -63,7 +62,7 @@
 - в справочнике единиц видна точность отображения количества (`display_precision`);
 - DB-level уникальность строк по позиции защищена в документах движения и инвентаризациях;
 - перемещение между складами корректно влияет на остатки, отчеты и Excel-выгрузку движений;
-- версия приложения `v0.2.0` видна в интерфейсе и синхронизирована с Electron package version;
+- версия приложения `v0.3.0` видна в интерфейсе и синхронизирована с Electron package version;
 - базовая role-aware UX-модель для авторизованных пользователей:
   - `admin` может выполнять все действия;
   - `operator` может выполнять складские операции, но не редактировать справочники и не перезагружать демо-данные;
