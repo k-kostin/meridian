@@ -39,6 +39,7 @@
                     <span class="nav-group-title">Справочники</span>
                     <a href="{% url 'unit_list' %}" class="{% if request.resolver_match.url_name == 'unit_list' or request.resolver_match.url_name == 'unit_update' %}active{% endif %}">Единицы</a>
                     <a href="{% url 'warehouse_list' %}" class="{% if request.resolver_match.url_name == 'warehouse_list' or request.resolver_match.url_name == 'warehouse_update' %}active{% endif %}">Склады</a>
+                    <a href="{% url 'category_list' %}" class="{% if request.resolver_match.url_name == 'category_list' or request.resolver_match.url_name == 'category_update' %}active{% endif %}">Категории</a>
                     <a href="{% url 'item_list' %}" class="{% if request.resolver_match.url_name == 'item_list' or request.resolver_match.url_name == 'item_update' %}active{% endif %}">Номенклатура</a>
                 </div>
                 <div class="nav-group">

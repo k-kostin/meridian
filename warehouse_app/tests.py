@@ -18,6 +18,8 @@ from .models import (
     InventoryLine,
     InventoryScope,
     Item,
+    ItemCategory,
+    UserSavedView,
     StockDocument,
     StockDocumentLine,
     StockDocumentType,
@@ -179,6 +181,25 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Вход в систему")
+
+    def test_item_category_can_be_assigned_to_item(self):
+        category = ItemCategory.objects.create(name="Расходники", code="consumables")
+        self.item.category = category
+        self.item.save()
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.category, category)
+
+    def test_item_list_filters_by_category(self):
+        category = ItemCategory.objects.create(name="Расходники", code="consumables")
+        self.item.category = category
+        self.item.save()
+        other = Item.objects.create(sku="OTHER-CAT", name="Другая позиция", unit=self.unit)
+
+        response = self.client.get("/items/", {"category": str(category.pk)})
+
+        self.assertContains(response, self.item.sku)
+        self.assertNotContains(response, other.sku)
 
     def test_parse_items_import_workbook_returns_rows(self):
         from .imports import parse_items_import_workbook
@@ -1626,6 +1647,19 @@ class WarehouseFlowTests(TestCase):
         rows = list(response.context["balances"].object_list)
         self.assertTrue(any(row["item__sku"] == "ZERO-001" for row in rows))
 
+    def test_balances_can_filter_by_category(self):
+        category = ItemCategory.objects.create(name="Расходники", code="consumables")
+        self.item.category = category
+        self.item.save()
+        other = Item.objects.create(sku="NO-CAT-BAL", name="Без категории", unit=self.unit)
+        self._receipt(self.item, "5")
+        self._receipt(other, "7")
+
+        response = self.client.get("/balances/", {"category": str(category.pk), "presentation": "consolidated"})
+
+        self.assertContains(response, self.item.sku)
+        self.assertNotContains(response, other.sku)
+
     def test_balances_preset_consolidated_switches_presentation(self):
         response = self.client.get("/balances/", {"preset": "consolidated"})
 
@@ -1685,6 +1719,48 @@ class WarehouseFlowTests(TestCase):
             for row_number in range(2, metadata_sheet.max_row + 1)
         }
         self.assertEqual(metadata["Представление"], "Сводно по складам")
+
+    def test_balance_export_filters_by_category(self):
+        category = ItemCategory.objects.create(name="Расходники", code="consumables")
+        self.item.category = category
+        self.item.save()
+        other = Item.objects.create(sku="NO-CAT-XLSX", name="Без категории XLSX", unit=self.unit)
+        self._receipt(self.item, "5")
+        self._receipt(other, "7")
+
+        response = self.client.get(
+            "/export/balances.xlsx",
+            {"category": str(category.pk), "presentation": "consolidated"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        rows = list(workbook["Остатки"].iter_rows(min_row=2, values_only=True))
+        exported_skus = {row[0] for row in rows}
+        self.assertIn(self.item.sku, exported_skus)
+        self.assertNotIn(other.sku, exported_skus)
+
+    def test_authenticated_user_can_save_document_view(self):
+        user = User.objects.create_user(username="saved-view-user", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.OPERATOR)
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/saved-views/documents/create/",
+            {"name": "Мои черновики", "status": DocumentStatus.DRAFT, "warehouse": str(self.warehouse.pk)},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = UserSavedView.objects.get(user=user, scope="documents")
+        self.assertEqual(saved.name, "Мои черновики")
+        self.assertEqual(saved.query_params["status"], DocumentStatus.DRAFT)
+        self.assertContains(response, "Мои черновики")
+
+    def test_anonymous_user_cannot_save_view(self):
+        response = self.client.post("/saved-views/documents/create/", {"name": "Test"})
+
+        self.assertEqual(response.status_code, 302)
 
     def test_item_list_paginates_large_nomenclature(self):
         for index in range(30):

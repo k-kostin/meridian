@@ -28,6 +28,12 @@
                 <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
             {% endfor %}
         </select>
+        <select name="category">
+            <option value="">Все категории</option>
+            {% for category in categories %}
+                <option value="{{ category.pk }}" {% if selected_category == category.pk|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
         <select name="presentation">
             <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
             <option value="by_warehouse" {% if selected_presentation == "by_warehouse" %}selected{% endif %}>По складам</option>

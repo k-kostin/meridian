@@ -47,10 +47,32 @@ class Warehouse(TimeStampedModel):
         return self.name
 
 
+class ItemCategory(TimeStampedModel):
+    code = models.CharField("Код", max_length=40, unique=True)
+    name = models.CharField("Наименование", max_length=120)
+    is_active = models.BooleanField("Активна", default=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Категория номенклатуры"
+        verbose_name_plural = "Категории номенклатуры"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Item(TimeStampedModel):
     sku = models.CharField("Артикул", max_length=40, unique=True)
     name = models.CharField("Наименование", max_length=180)
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="items", verbose_name="Ед. изм.")
+    category = models.ForeignKey(
+        ItemCategory,
+        on_delete=models.PROTECT,
+        related_name="items",
+        verbose_name="Категория",
+        null=True,
+        blank=True,
+    )
     is_active = models.BooleanField("Активен", default=True)
     notes = models.TextField("Комментарий", blank=True)
 
@@ -84,6 +106,37 @@ class UserRole(models.TextChoices):
     ADMIN = "admin", "Администратор"
     OPERATOR = "operator", "Оператор"
     VIEWER = "viewer", "Наблюдатель"
+
+
+class SavedViewScope(models.TextChoices):
+    DOCUMENTS = "documents", "Документы движения"
+    BALANCES = "balances", "Текущие остатки"
+
+
+class UserSavedView(TimeStampedModel):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="warehouse_saved_views",
+    )
+    scope = models.CharField("Раздел", max_length=20, choices=SavedViewScope.choices)
+    name = models.CharField("Название", max_length=80)
+    query_params = models.JSONField("Параметры")
+    is_default = models.BooleanField("По умолчанию", default=False)
+
+    class Meta:
+        ordering = ["scope", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "scope", "name"],
+                name="unique_saved_view_name_per_user_scope",
+            )
+        ]
+        verbose_name = "Сохраненное представление"
+        verbose_name_plural = "Сохраненные представления"
+
+    def __str__(self) -> str:
+        return f"{self.user} / {self.get_scope_display()} / {self.name}"
 
 
 class ActivityEventType(models.TextChoices):
