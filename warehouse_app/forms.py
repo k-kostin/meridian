@@ -75,6 +75,7 @@ class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
         initial=ITEM_IMPORT_MODE_CREATE_ONLY,
         required=False,
     )
+    auto_create_units = forms.BooleanField(label="Создать отсутствующие единицы измерения", required=False)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -256,6 +256,7 @@ def validate_items_import_result(
     result: ItemImportResult,
     *,
     import_mode: str = ITEM_IMPORT_MODE_CREATE_ONLY,
+    auto_create_units: bool = False,
 ) -> list[ImportErrorDetail]:
     import_mode = _normalize_item_import_mode(import_mode)
     errors = list(result.errors)
@@ -277,7 +278,15 @@ def validate_items_import_result(
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления"))
 
         if row.unit_code and row.unit_code not in existing_unit_codes:
-            errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+            if not auto_create_units:
+                errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+            elif len(row.unit_code) > Unit._meta.get_field("code").max_length:
+                errors.append(
+                    ImportErrorDetail(
+                        row_number=row.row_number,
+                        message="Код единицы измерения слишком длинный (максимум 20 символов)",
+                    )
+                )
 
     return errors
 
@@ -309,49 +318,78 @@ def commit_items_import(
     result: ItemImportResult,
     *,
     import_mode: str = ITEM_IMPORT_MODE_CREATE_ONLY,
+    auto_create_units: bool = False,
 ) -> ItemImportCommitResult:
     import_mode = _normalize_item_import_mode(import_mode)
-    errors = validate_items_import_result(result, import_mode=import_mode)
+    errors = validate_items_import_result(
+        result,
+        import_mode=import_mode,
+        auto_create_units=auto_create_units,
+    )
     if errors:
         return ItemImportCommitResult(created_count=0, updated_count=0, errors=errors)
 
-    units = Unit.objects.in_bulk([row.unit_code for row in result.rows], field_name="code")
-    if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING:
-        existing_items = Item.objects.in_bulk([row.sku for row in result.rows], field_name="sku")
-        items_to_update = []
+    unit_codes = {row.unit_code for row in result.rows if row.unit_code}
+    units = Unit.objects.in_bulk(unit_codes, field_name="code")
+    missing_unit_codes = {unit_code for unit_code in unit_codes if unit_code not in units} if auto_create_units else set()
+
+    with transaction.atomic():
+        existing_items = {}
+        if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING:
+            existing_items = Item.objects.in_bulk([row.sku for row in result.rows], field_name="sku")
+            missing_item_errors = [
+                ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления")
+                for row in result.rows
+                if row.sku not in existing_items
+            ]
+            if missing_item_errors:
+                return ItemImportCommitResult(created_count=0, updated_count=0, errors=missing_item_errors)
+
+        if missing_unit_codes:
+            Unit.objects.bulk_create(
+                [Unit(code=unit_code, name=unit_code) for unit_code in sorted(missing_unit_codes)],
+                ignore_conflicts=True,
+            )
+            units = Unit.objects.in_bulk(unit_codes, field_name="code")
+
+        if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING:
+            items_to_update = []
+            race_errors: list[ImportErrorDetail] = []
+            for row in result.rows:
+                item = existing_items.get(row.sku)
+                unit = units.get(row.unit_code)
+                if unit is None:
+                    race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+                    continue
+                item.name = row.name
+                item.unit = unit
+                item.is_active = row.is_active
+                item.notes = row.comment
+                items_to_update.append(item)
+            if race_errors:
+                return ItemImportCommitResult(created_count=0, updated_count=0, errors=race_errors)
+            Item.objects.bulk_update(items_to_update, ["name", "unit", "is_active", "notes"])
+
+            return ItemImportCommitResult(created_count=0, updated_count=len(items_to_update), errors=[])
+
+        items = []
         race_errors: list[ImportErrorDetail] = []
         for row in result.rows:
-            item = existing_items.get(row.sku)
             unit = units.get(row.unit_code)
-            if item is None:
-                race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления"))
-                continue
             if unit is None:
                 race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
                 continue
-            item.name = row.name
-            item.unit = unit
-            item.is_active = row.is_active
-            item.notes = row.comment
-            items_to_update.append(item)
+            items.append(
+                Item(
+                    sku=row.sku,
+                    name=row.name,
+                    unit=unit,
+                    is_active=row.is_active,
+                    notes=row.comment,
+                )
+            )
         if race_errors:
             return ItemImportCommitResult(created_count=0, updated_count=0, errors=race_errors)
-        with transaction.atomic():
-            Item.objects.bulk_update(items_to_update, ["name", "unit", "is_active", "notes"])
-
-        return ItemImportCommitResult(created_count=0, updated_count=len(items_to_update), errors=[])
-
-    items = [
-        Item(
-            sku=row.sku,
-            name=row.name,
-            unit=units[row.unit_code],
-            is_active=row.is_active,
-            notes=row.comment,
-        )
-        for row in result.rows
-    ]
-    with transaction.atomic():
         Item.objects.bulk_create(items)
 
     return ItemImportCommitResult(created_count=len(result.rows), updated_count=0, errors=[])

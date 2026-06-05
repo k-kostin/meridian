@@ -338,8 +338,13 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
         try:
             parsed_result = parse_items_import_workbook(form.cleaned_data["workbook"])
             import_mode = form.cleaned_data["import_mode"]
+            auto_create_units = form.cleaned_data.get("auto_create_units", False)
             if action == "commit":
-                commit_result = commit_items_import(parsed_result, import_mode=import_mode)
+                commit_result = commit_items_import(
+                    parsed_result,
+                    import_mode=import_mode,
+                    auto_create_units=auto_create_units,
+                )
                 result = ItemImportResult(rows=parsed_result.rows, errors=commit_result.errors)
                 if not commit_result.errors:
                     if commit_result.created_count:
@@ -348,7 +353,11 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
                         messages.success(request, f"Импорт обновил позиций: {commit_result.updated_count}.")
                     return redirect("item_list")
             else:
-                validation_errors = validate_items_import_result(parsed_result, import_mode=import_mode)
+                validation_errors = validate_items_import_result(
+                    parsed_result,
+                    import_mode=import_mode,
+                    auto_create_units=auto_create_units,
+                )
                 result = ItemImportResult(rows=parsed_result.rows, errors=validation_errors)
             has_preview = True
         except Exception:
