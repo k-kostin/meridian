@@ -576,6 +576,40 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(Unit.objects.filter(code="pack").count(), 1)
         self.assertEqual(Item.objects.filter(unit__code="pack").count(), 2)
 
+    def test_item_import_auto_create_rejects_too_long_unit_code(self):
+        admin = User.objects.create_user(username="unit-long-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        long_unit_code = "x" * 21
+        workbook = self._import_workbook_upload([["AUTO-UNIT-LONG", "Позиция", long_unit_code, "да", ""]])
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "create_only", "auto_create_units": "1", "workbook": workbook},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Код единицы измерения слишком длинный")
+        self.assertFalse(Unit.objects.filter(code=long_unit_code).exists())
+        self.assertFalse(Item.objects.filter(sku="AUTO-UNIT-LONG").exists())
+
+    def test_commit_items_import_create_mode_handles_missing_unit_after_validation(self):
+        from .imports import commit_items_import, parse_items_import_workbook, validate_items_import_result
+
+        temp_unit = Unit.objects.create(code="tmp", name="Временная единица")
+        workbook = self._import_workbook_upload([["RACE-UNIT-1", "Позиция", temp_unit.code, "да", ""]])
+        result = parse_items_import_workbook(workbook)
+
+        self.assertEqual(validate_items_import_result(result), [])
+
+        temp_unit.delete()
+        commit_result = commit_items_import(result)
+
+        self.assertEqual(commit_result.created_count, 0)
+        self.assertEqual(commit_result.updated_count, 0)
+        self.assertEqual([error.message for error in commit_result.errors], ["Единица не найдена"])
+        self.assertFalse(Item.objects.filter(sku="RACE-UNIT-1").exists())
+
     def test_item_import_preview_renders_row_errors(self):
         admin = User.objects.create_user(username="admin-import-errors", password="pass")
         UserProfile.objects.create(user=admin, role=UserRole.ADMIN)

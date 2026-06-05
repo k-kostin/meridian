@@ -277,8 +277,16 @@ def validate_items_import_result(
             if import_mode == ITEM_IMPORT_MODE_UPDATE_EXISTING and row.sku not in existing_skus:
                 errors.append(ImportErrorDetail(row_number=row.row_number, message="Артикул не найден для обновления"))
 
-        if row.unit_code and row.unit_code not in existing_unit_codes and not auto_create_units:
-            errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+        if row.unit_code and row.unit_code not in existing_unit_codes:
+            if not auto_create_units:
+                errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+            elif len(row.unit_code) > Unit._meta.get_field("code").max_length:
+                errors.append(
+                    ImportErrorDetail(
+                        row_number=row.row_number,
+                        message="Код единицы измерения слишком длинный (максимум 20 символов)",
+                    )
+                )
 
     return errors
 
@@ -364,16 +372,24 @@ def commit_items_import(
 
             return ItemImportCommitResult(created_count=0, updated_count=len(items_to_update), errors=[])
 
-        items = [
-            Item(
-                sku=row.sku,
-                name=row.name,
-                unit=units[row.unit_code],
-                is_active=row.is_active,
-                notes=row.comment,
+        items = []
+        race_errors: list[ImportErrorDetail] = []
+        for row in result.rows:
+            unit = units.get(row.unit_code)
+            if unit is None:
+                race_errors.append(ImportErrorDetail(row_number=row.row_number, message="Единица не найдена"))
+                continue
+            items.append(
+                Item(
+                    sku=row.sku,
+                    name=row.name,
+                    unit=unit,
+                    is_active=row.is_active,
+                    notes=row.comment,
+                )
             )
-            for row in result.rows
-        ]
+        if race_errors:
+            return ItemImportCommitResult(created_count=0, updated_count=0, errors=race_errors)
         Item.objects.bulk_create(items)
 
     return ItemImportCommitResult(created_count=len(result.rows), updated_count=0, errors=[])
