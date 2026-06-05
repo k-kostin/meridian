@@ -1660,6 +1660,15 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, self.item.sku)
         self.assertNotContains(response, other.sku)
 
+    def test_invalid_category_filter_does_not_crash_balances(self):
+        self._receipt(self.item, "5")
+
+        response = self.client.get("/balances/", {"category": "not-a-number", "presentation": "consolidated"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["selected_category"], "")
+        self.assertContains(response, self.item.sku)
+
     def test_balances_preset_consolidated_switches_presentation(self):
         response = self.client.get("/balances/", {"preset": "consolidated"})
 
@@ -1740,6 +1749,19 @@ class WarehouseFlowTests(TestCase):
         self.assertIn(self.item.sku, exported_skus)
         self.assertNotIn(other.sku, exported_skus)
 
+    def test_invalid_category_filter_does_not_crash_balance_export(self):
+        self._receipt(self.item, "5")
+
+        response = self.client.get(
+            "/export/balances.xlsx",
+            {"category": "not-a-number", "presentation": "consolidated"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        workbook = load_workbook(BytesIO(response.content))
+        rows = list(workbook["Остатки"].iter_rows(min_row=2, values_only=True))
+        self.assertIn(self.item.sku, {row[0] for row in rows})
+
     def test_authenticated_user_can_save_document_view(self):
         user = User.objects.create_user(username="saved-view-user", password="pass")
         UserProfile.objects.create(user=user, role=UserRole.OPERATOR)
@@ -1756,6 +1778,22 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(saved.name, "Мои черновики")
         self.assertEqual(saved.query_params["status"], DocumentStatus.DRAFT)
         self.assertContains(response, "Мои черновики")
+
+    def test_saved_view_name_is_truncated_to_field_limit(self):
+        user = User.objects.create_user(username="saved-view-long-name", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.OPERATOR)
+        self.client.force_login(user)
+        long_name = "x" * 120
+
+        response = self.client.post(
+            "/saved-views/documents/create/",
+            {"name": long_name, "status": DocumentStatus.DRAFT},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        saved = UserSavedView.objects.get(user=user, scope="documents")
+        self.assertEqual(len(saved.name), 80)
 
     def test_anonymous_user_cannot_save_view(self):
         response = self.client.post("/saved-views/documents/create/", {"name": "Test"})

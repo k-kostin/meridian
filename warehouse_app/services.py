@@ -273,7 +273,10 @@ def _warehouse_label(warehouse):
 def _category_label(category_id):
     if not category_id:
         return "Все категории"
-    category = ItemCategory.objects.filter(pk=category_id).first()
+    try:
+        category = ItemCategory.objects.filter(pk=int(category_id)).first()
+    except (TypeError, ValueError):
+        category = None
     return category.name if category is not None else f"Категория #{category_id}"
 
 

@@ -129,6 +129,11 @@ def _saved_views_for_user(request: HttpRequest, scope: str):
     return UserSavedView.objects.filter(user=request.user, scope=scope)
 
 
+def _get_clean_id(request: HttpRequest, key: str) -> str | None:
+    value = request.GET.get(key)
+    return value if value and value.isdigit() else None
+
+
 def healthz(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok"})
 
@@ -347,7 +352,7 @@ def category_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 def item_list(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     items = Item.objects.select_related("unit", "category").order_by("name", "sku")
     if query:
         items = items.filter(Q(name__icontains=query) | Q(sku__icontains=query))
@@ -452,7 +457,7 @@ def saved_view_create(request: HttpRequest, scope: str) -> HttpResponse:
         raise PermissionDenied("Unknown saved view scope.")
 
     redirect_route = SAVED_VIEW_LIST_ROUTES[scope]
-    name = request.POST.get("name", "").strip()
+    name = request.POST.get("name", "").strip()[:80]
     if not name:
         messages.error(request, "Укажите название представления.")
         return redirect(redirect_route)
@@ -821,7 +826,7 @@ def inventory_post(request: HttpRequest, pk: int) -> HttpResponse:
 def balance_report(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     preset, preset_filters = _balance_preset_filters(request)
     include_zero_value = request.GET.get("include_zero")
     include_zero = (
@@ -866,7 +871,7 @@ def balance_report(request: HttpRequest) -> HttpResponse:
 
 def daily_ledger_report(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
@@ -918,7 +923,7 @@ def daily_ledger_report(request: HttpRequest) -> HttpResponse:
 
 def monthly_ledger_report(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
@@ -981,7 +986,7 @@ def monthly_ledger_report(request: HttpRequest) -> HttpResponse:
 def analytics_report(request: HttpRequest) -> HttpResponse:
     mode = request.GET.get("mode", "day")
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
@@ -1024,7 +1029,7 @@ def export_items(request: HttpRequest) -> HttpResponse:
 def export_balances(request: HttpRequest) -> HttpResponse:
     query = request.GET.get("q", "").strip()
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     _, preset_filters = _balance_preset_filters(request)
     include_zero_value = request.GET.get("include_zero")
     include_zero = (
@@ -1050,7 +1055,7 @@ def export_balances(request: HttpRequest) -> HttpResponse:
 
 def export_daily_ledger(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
@@ -1097,7 +1102,7 @@ def export_inventories(request: HttpRequest) -> HttpResponse:
 def export_analysis(request: HttpRequest) -> HttpResponse:
     mode = request.GET.get("mode", "day")
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
@@ -1122,7 +1127,7 @@ def export_analysis(request: HttpRequest) -> HttpResponse:
 
 def export_monthly_ledger(request: HttpRequest) -> HttpResponse:
     warehouse_id = request.GET.get("warehouse")
-    category_id = request.GET.get("category")
+    category_id = _get_clean_id(request, "category")
     presentation = normalize_presentation(
         request.GET.get("presentation"),
         default=PRESENTATION_CONSOLIDATED,
