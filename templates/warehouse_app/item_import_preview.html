@@ -32,6 +32,14 @@
                 <small>Режим обновления меняет только существующие позиции и не создает новые артикулы.</small>
                 {{ form.import_mode.errors }}
             </div>
+            <div class="field checkbox-field">
+                <label>
+                    {{ form.auto_create_units }}
+                    <span>{{ form.auto_create_units.label }}</span>
+                </label>
+                <small>Автосоздание единиц использует код как название. Точность можно настроить позже в справочнике единиц.</small>
+                {{ form.auto_create_units.errors }}
+            </div>
             <button type="submit" name="action" value="preview" class="button primary">Проверить файл</button>
         </form>
     </article>
@@ -125,6 +133,13 @@
                         <label for="{{ form.import_mode.id_for_label }}">Режим импорта</label>
                         {{ form.import_mode }}
                         <small>Режим обновления меняет только существующие позиции и не создает новые артикулы.</small>
+                    </div>
+                    <div class="field checkbox-field">
+                        <label>
+                            {{ form.auto_create_units }}
+                            <span>{{ form.auto_create_units.label }}</span>
+                        </label>
+                        <small>Автосоздание единиц использует код как название. Точность можно настроить позже в справочнике единиц.</small>
                     </div>
                     <button type="submit" name="action" value="commit" class="button primary">Импортировать валидные строки</button>
                 </form>

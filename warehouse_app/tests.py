@@ -525,6 +525,57 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "Артикул не найден для обновления")
         self.assertFalse(Item.objects.filter(sku="NEW-SKU").exists())
 
+    def test_item_import_rejects_unknown_unit_without_auto_create(self):
+        admin = User.objects.create_user(username="unit-strict-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload([["AUTO-UNIT-1", "Позиция", "box", "да", ""]])
+
+        response = self.client.post("/items/import/", {"workbook": workbook})
+
+        self.assertContains(response, "Единица не найдена")
+        self.assertFalse(Unit.objects.filter(code="box").exists())
+
+    def test_item_import_auto_creates_missing_unit_when_enabled(self):
+        admin = User.objects.create_user(username="unit-auto-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload([["AUTO-UNIT-2", "Позиция", "box", "да", ""]])
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "create_only", "auto_create_units": "1", "workbook": workbook},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Unit.objects.filter(code="box", name="box").exists())
+        self.assertTrue(Item.objects.filter(sku="AUTO-UNIT-2", unit__code="box").exists())
+
+    def test_item_import_auto_create_units_deduplicates_missing_unit_codes(self):
+        admin = User.objects.create_user(username="unit-dedupe-admin", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        workbook = self._import_workbook_upload(
+            [
+                ["AUTO-UNIT-3", "Позиция 1", "pack", "да", ""],
+                ["AUTO-UNIT-4", "Позиция 2", "pack", "да", ""],
+            ]
+        )
+
+        response = self.client.post(
+            "/items/import/",
+            {"action": "commit", "import_mode": "create_only", "auto_create_units": "1", "workbook": workbook},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Unit.objects.filter(code="pack").count(), 1)
+        self.assertEqual(Item.objects.filter(unit__code="pack").count(), 2)
+
     def test_item_import_preview_renders_row_errors(self):
         admin = User.objects.create_user(username="admin-import-errors", password="pass")
         UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
