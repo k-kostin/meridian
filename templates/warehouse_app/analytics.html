@@ -28,6 +28,15 @@
                 </select>
             </div>
             <div class="field">
+                <label for="id_category">Категория</label>
+                <select id="id_category" name="category">
+                    <option value="">Все категории</option>
+                    {% for category in categories %}
+                        <option value="{{ category.pk }}" {% if selected_category == category.pk|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field">
                 <label for="id_mode">Режим</label>
                 <select id="id_mode" name="mode">
                     <option value="day" {% if selected_mode == "day" %}selected{% endif %}>День</option>

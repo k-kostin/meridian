@@ -10,7 +10,7 @@ from django.utils import timezone
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 
-from .models import DocumentStatus, InventoryDocument, Item, StockDocumentLine
+from .models import DocumentStatus, InventoryDocument, Item, ItemCategory, StockDocumentLine
 from .models import StockDocumentType, Warehouse
 
 
@@ -270,6 +270,16 @@ def _warehouse_label(warehouse):
     return warehouse.name if warehouse is not None else "Все склады"
 
 
+def _category_label(category_id):
+    if not category_id:
+        return "Все категории"
+    try:
+        category = ItemCategory.objects.filter(pk=int(category_id)).first()
+    except (TypeError, ValueError):
+        category = None
+    return category.name if category is not None else f"Категория #{category_id}"
+
+
 def _safe_sheet_title(workbook, raw_title):
     cleaned = "".join("_" if char in INVALID_SHEET_TITLE_CHARS else char for char in str(raw_title or "Лист"))
     cleaned = cleaned.strip() or "Лист"
@@ -377,9 +387,12 @@ def _zero_balance_row(item, *, warehouse=None, presentation=PRESENTATION_CONSOLI
     return row
 
 
-def _expand_zero_balance_rows(rows, warehouse, presentation):
+def _expand_zero_balance_rows(rows, warehouse, presentation, category_id=None):
     row_map = {_row_key_from_balance(row, presentation): row for row in rows}
-    items = list(Item.objects.select_related("unit").order_by("name", "sku"))
+    items = Item.objects.select_related("unit").order_by("name", "sku")
+    if category_id:
+        items = items.filter(category_id=category_id)
+    items = list(items)
     expanded = []
     if presentation == PRESENTATION_BY_WAREHOUSE:
         warehouses = [warehouse] if warehouse is not None else list(
@@ -425,10 +438,16 @@ def filter_balance_rows(rows, query, presentation):
     return filtered
 
 
-def get_balance_rows(warehouse=None, as_of_date=None, presentation=PRESENTATION_BY_WAREHOUSE, include_zero=False):
+def get_balance_rows(
+    warehouse=None,
+    as_of_date=None,
+    presentation=PRESENTATION_BY_WAREHOUSE,
+    include_zero=False,
+    category_id=None,
+):
     presentation = normalize_presentation(presentation, default=PRESENTATION_BY_WAREHOUSE)
     row_map = {}
-    for event in get_movement_rows(warehouse=warehouse, date_to=as_of_date):
+    for event in get_movement_rows(warehouse=warehouse, date_to=as_of_date, category_id=category_id):
         key = _row_key_from_event(event, presentation)
         row = row_map.setdefault(key, _balance_row_from_event(event, presentation))
         if event.quantity > 0:
@@ -439,7 +458,7 @@ def get_balance_rows(warehouse=None, as_of_date=None, presentation=PRESENTATION_
 
     rows = list(row_map.values())
     if include_zero:
-        rows = _expand_zero_balance_rows(rows, warehouse, presentation)
+        rows = _expand_zero_balance_rows(rows, warehouse, presentation, category_id=category_id)
     else:
         rows = [row for row in rows if row["quantity"] != 0]
     if presentation == PRESENTATION_BY_WAREHOUSE:
@@ -449,10 +468,15 @@ def get_balance_rows(warehouse=None, as_of_date=None, presentation=PRESENTATION_
     return _apply_balance_warehouse_labels(rows, presentation)
 
 
-def get_balance_map(warehouse=None, as_of_date=None, presentation=PRESENTATION_CONSOLIDATED):
+def get_balance_map(warehouse=None, as_of_date=None, presentation=PRESENTATION_CONSOLIDATED, category_id=None):
     presentation = normalize_presentation(presentation)
     balances = {}
-    for row in get_balance_rows(warehouse=warehouse, as_of_date=as_of_date, presentation=presentation):
+    for row in get_balance_rows(
+        warehouse=warehouse,
+        as_of_date=as_of_date,
+        presentation=presentation,
+        category_id=category_id,
+    ):
         key = _row_key_from_balance(row, presentation)
         balances[key] = balances.get(key, Decimal("0")) + row["quantity"]
     return balances
@@ -510,6 +534,7 @@ def build_daily_ledger(
     period_start=None,
     period_end=None,
     presentation=PRESENTATION_CONSOLIDATED,
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     if period_start is None or period_end is None:
@@ -522,12 +547,18 @@ def build_daily_ledger(
         as_of_date=period_start - timedelta(days=1),
         presentation=presentation,
         include_zero=True,
+        category_id=category_id,
     )
     key_order = [_row_key_from_balance(row, presentation) for row in opening_rows]
     meta_map = {key: _ledger_row_meta(row, presentation) for key, row in zip(key_order, opening_rows)}
     current_balances = {key: row["quantity"] for key, row in zip(key_order, opening_rows)}
 
-    movement_rows = get_movement_rows(warehouse=warehouse, date_from=period_start, date_to=period_end)
+    movement_rows = get_movement_rows(
+        warehouse=warehouse,
+        date_from=period_start,
+        date_to=period_end,
+        category_id=category_id,
+    )
     movement_map = {}
     document_numbers = set()
     line_keys = set()
@@ -588,6 +619,7 @@ def build_monthly_ledger(
     period_start=None,
     period_end=None,
     presentation=PRESENTATION_CONSOLIDATED,
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     if period_start is None or period_end is None:
@@ -602,6 +634,7 @@ def build_monthly_ledger(
         as_of_date=normalized_start - timedelta(days=1),
         presentation=presentation,
         include_zero=True,
+        category_id=category_id,
     )
     key_order = [_row_key_from_balance(row, presentation) for row in opening_rows]
     meta_map = {key: _ledger_row_meta(row, presentation) for key, row in zip(key_order, opening_rows)}
@@ -611,6 +644,7 @@ def build_monthly_ledger(
         warehouse=warehouse,
         date_from=normalized_start,
         date_to=normalized_end,
+        category_id=category_id,
     )
     movement_map = {}
     document_numbers = set()
@@ -668,7 +702,7 @@ def build_monthly_ledger(
     }
 
 
-def _posted_movement_lines(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
+def _posted_movement_lines(warehouse=None, date_from=None, date_to=None, document_type=None, status=None, category_id=None):
     target_status = status or DocumentStatus.POSTED
     queryset = (
         StockDocumentLine.objects.filter(document__status=target_status)
@@ -677,6 +711,8 @@ def _posted_movement_lines(warehouse=None, date_from=None, date_to=None, documen
     )
     if document_type:
         queryset = queryset.filter(document__document_type=document_type)
+    if category_id:
+        queryset = queryset.filter(item__category_id=category_id)
     if date_from is not None:
         queryset = queryset.filter(document__operation_date__gte=date_from)
     if date_to is not None:
@@ -705,9 +741,15 @@ def _movement_event(line: StockDocumentLine, warehouse, quantity: Decimal):
     )
 
 
-def get_movement_rows(warehouse=None, date_from=None, date_to=None, document_type=None, status=None):
+def get_movement_rows(warehouse=None, date_from=None, date_to=None, document_type=None, status=None, category_id=None):
     events = []
-    for line in _posted_movement_lines(date_from=date_from, date_to=date_to, document_type=document_type, status=status):
+    for line in _posted_movement_lines(
+        date_from=date_from,
+        date_to=date_to,
+        document_type=document_type,
+        status=status,
+        category_id=category_id,
+    ):
         if line.document.document_type == StockDocumentType.TRANSFER:
             source_quantity = -abs(line.quantity)
             destination_quantity = abs(line.quantity)
@@ -763,6 +805,7 @@ def build_period_report(
     period_start=None,
     period_end=None,
     presentation=PRESENTATION_CONSOLIDATED,
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     if period_start is None or period_end is None:
@@ -771,12 +814,27 @@ def build_period_report(
         period_end = resolved["end"]
 
     opening_date = period_start - timedelta(days=1)
-    opening_rows = get_balance_rows(warehouse=warehouse, as_of_date=opening_date, presentation=presentation)
-    closing_rows = get_balance_rows(warehouse=warehouse, as_of_date=period_end, presentation=presentation)
+    opening_rows = get_balance_rows(
+        warehouse=warehouse,
+        as_of_date=opening_date,
+        presentation=presentation,
+        category_id=category_id,
+    )
+    closing_rows = get_balance_rows(
+        warehouse=warehouse,
+        as_of_date=period_end,
+        presentation=presentation,
+        category_id=category_id,
+    )
     opening_map = {_row_key_from_balance(row, presentation): row["quantity"] for row in opening_rows}
     closing_map = {_row_key_from_balance(row, presentation): row["quantity"] for row in closing_rows}
 
-    movement_qs = get_movement_rows(warehouse=warehouse, date_from=period_start, date_to=period_end)
+    movement_qs = get_movement_rows(
+        warehouse=warehouse,
+        date_from=period_start,
+        date_to=period_end,
+        category_id=category_id,
+    )
     row_map = {
         _row_key_from_balance(row, presentation): _base_row_from_balance(row, presentation) for row in opening_rows
     }
@@ -885,10 +943,21 @@ def export_items_xlsx():
     return _workbook_export(workbook, "items.xlsx")
 
 
-def export_balances_xlsx(warehouse=None, presentation=PRESENTATION_BY_WAREHOUSE, query="", include_zero=False):
+def export_balances_xlsx(
+    warehouse=None,
+    presentation=PRESENTATION_BY_WAREHOUSE,
+    query="",
+    include_zero=False,
+    category_id=None,
+):
     presentation = normalize_presentation(presentation, default=PRESENTATION_BY_WAREHOUSE)
     rows = filter_balance_rows(
-        get_balance_rows(warehouse=warehouse, presentation=presentation, include_zero=include_zero),
+        get_balance_rows(
+            warehouse=warehouse,
+            presentation=presentation,
+            include_zero=include_zero,
+            category_id=category_id,
+        ),
         query=query,
         presentation=presentation,
     )
@@ -901,6 +970,7 @@ def export_balances_xlsx(warehouse=None, presentation=PRESENTATION_BY_WAREHOUSE,
             ("Отчет", "Текущие остатки"),
             ("Сформировано", timezone.localtime()),
             ("Фильтр по складу", _warehouse_label(warehouse)),
+            ("Фильтр по категории", _category_label(category_id)),
             ("Представление", presentation_label(presentation)),
             ("Поиск", query or "-"),
             ("Показывать нулевые позиции", "Да" if include_zero else "Нет"),
@@ -1034,6 +1104,7 @@ def export_daily_ledger_xlsx(
     period_start=None,
     period_end=None,
     presentation=PRESENTATION_CONSOLIDATED,
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     report = build_daily_ledger(
@@ -1041,6 +1112,7 @@ def export_daily_ledger_xlsx(
         period_start=period_start,
         period_end=period_end,
         presentation=presentation,
+        category_id=category_id,
     )
     workbook = Workbook()
     sheet = workbook.active
@@ -1054,6 +1126,7 @@ def export_daily_ledger_xlsx(
             ("Начало периода", report["period"]["start"]),
             ("Конец периода", report["period"]["end"]),
             ("Фильтр по складу", _warehouse_label(warehouse)),
+            ("Фильтр по категории", _category_label(category_id)),
             ("Представление", presentation_label(presentation)),
             ("Строк в отчете", report["summary"]["rows_count"]),
             ("Дней в периоде", report["summary"]["days_count"]),
@@ -1095,6 +1168,7 @@ def export_monthly_ledger_xlsx(
     period_start=None,
     period_end=None,
     presentation=PRESENTATION_CONSOLIDATED,
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     report = build_monthly_ledger(
@@ -1102,6 +1176,7 @@ def export_monthly_ledger_xlsx(
         period_start=period_start,
         period_end=period_end,
         presentation=presentation,
+        category_id=category_id,
     )
     workbook = Workbook()
     sheet = workbook.active
@@ -1115,6 +1190,7 @@ def export_monthly_ledger_xlsx(
             ("Начало периода", report["period"]["start"]),
             ("Конец периода", report["period"]["end"]),
             ("Фильтр по складу", _warehouse_label(warehouse)),
+            ("Фильтр по категории", _category_label(category_id)),
             ("Представление", presentation_label(presentation)),
             ("Строк в отчете", report["summary"]["rows_count"]),
             ("Месяцев в периоде", report["summary"]["months_count"]),
@@ -1160,6 +1236,7 @@ def export_period_analysis_xlsx(
     label="period",
     presentation=PRESENTATION_CONSOLIDATED,
     mode_label="День",
+    category_id=None,
 ):
     presentation = normalize_presentation(presentation)
     report = build_period_report(
@@ -1167,6 +1244,7 @@ def export_period_analysis_xlsx(
         period_start=period_start,
         period_end=period_end,
         presentation=presentation,
+        category_id=category_id,
     )
     workbook = Workbook()
     sheet = workbook.active
@@ -1181,6 +1259,7 @@ def export_period_analysis_xlsx(
             ("Начало периода", period_start),
             ("Конец периода", period_end),
             ("Фильтр по складу", _warehouse_label(warehouse)),
+            ("Фильтр по категории", _category_label(category_id)),
             ("Представление", presentation_label(presentation)),
             ("Строк в отчете", report["summary"]["rows_count"]),
             ("Строк движений", report["summary"]["lines_count"]),

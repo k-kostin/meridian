@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Категории номенклатуры{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <span class="eyebrow">Справочник</span>
+        <h2>Категории номенклатуры</h2>
+        <p>Группы позиций для фильтрации справочника, остатков и отчетов без изменения складского учета.</p>
+    </div>
+</section>
+
+<section class="two-column wide-left">
+    {% if app_can_manage_references %}
+        <article class="card">
+            <h3>Добавить категорию</h3>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {% for field in form %}
+                    <div class="field">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+                        {{ field.errors }}
+                    </div>
+                {% endfor %}
+                <button type="submit" class="button primary">Добавить</button>
+            </form>
+        </article>
+    {% endif %}
+    <article class="card">
+        <div class="section-head">
+            <h3>Список категорий</h3>
+        </div>
+        <div class="table-wrap">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Код</th>
+                        <th>Наименование</th>
+                        <th>Статус</th>
+                        <th>Позиций</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                        <tr>
+                            <td>{{ category.code }}</td>
+                            <td>{{ category.name }}</td>
+                            <td>{{ category.is_active|yesno:"Активна,Отключена" }}</td>
+                            <td>{{ category.items_count }}</td>
+                            <td>{% if app_can_manage_references %}<a class="data-link" href="{% url 'category_update' category.pk %}">Изменить</a>{% endif %}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="5" class="empty-state">
+                                <div class="empty-state-block">
+                                    <strong>Категории пока не заполнены.</strong>
+                                    <span>Добавьте категорию, если нужно группировать позиции в отчетах и списках.</span>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </article>
+</section>
+{% endblock %}

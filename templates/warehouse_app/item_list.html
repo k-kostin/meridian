@@ -40,6 +40,12 @@
             <h3>Список номенклатуры</h3>
             <form method="get" class="inline-filters" data-enhanced-filters="1">
                 <input type="search" name="q" value="{{ query }}" placeholder="Поиск по артикулу или названию" class="search-input">
+                <select name="category">
+                    <option value="">Все категории</option>
+                    {% for category in categories %}
+                        <option value="{{ category.pk }}" {% if selected_category == category.pk|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+                    {% endfor %}
+                </select>
                 <select name="page_size" data-submit-on="change">
                     {% for option in page_size_options %}
                         <option value="{{ option }}" {% if page_size == option %}selected{% endif %}>{{ option }} на странице</option>
@@ -55,6 +61,7 @@
                         <th>Артикул</th>
                         <th>Наименование</th>
                         <th>Ед.</th>
+                        <th>Категория</th>
                         <th>Статус</th>
                         <th></th>
                     </tr>
@@ -65,12 +72,13 @@
                             <td>{{ item.sku }}</td>
                             <td>{{ item.name }}</td>
                             <td>{{ item.unit.code }}</td>
+                            <td>{{ item.category.name|default:"-" }}</td>
                             <td>{{ item.is_active|yesno:"Активна,Отключена" }}</td>
                             <td>{% if app_can_manage_references %}<a class="data-link" href="{% url 'item_update' item.pk %}">Изменить</a>{% endif %}</td>
                         </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="5" class="empty-state">
+                            <td colspan="6" class="empty-state">
                                 <div class="empty-state-block">
                                     <strong>Номенклатура пока не заполнена.</strong>
                                     <span>Добавьте первую позицию через форму слева или загрузите демо-данные для быстрого показа.</span>

@@ -1,6 +1,17 @@
 from django.contrib import admin
 
-from .models import DocumentStatus, InventoryDocument, InventoryLine, Item, StockDocument, StockDocumentLine, Unit, Warehouse
+from .models import (
+    DocumentStatus,
+    InventoryDocument,
+    InventoryLine,
+    Item,
+    ItemCategory,
+    UserSavedView,
+    StockDocument,
+    StockDocumentLine,
+    Unit,
+    Warehouse,
+)
 
 
 class StockDocumentLineInline(admin.TabularInline):
@@ -28,9 +39,23 @@ class WarehouseAdmin(admin.ModelAdmin):
 
 @admin.register(Item)
 class ItemAdmin(admin.ModelAdmin):
-    list_display = ("sku", "name", "unit", "is_active")
+    list_display = ("sku", "name", "unit", "category", "is_active")
     search_fields = ("sku", "name")
-    list_filter = ("is_active", "unit")
+    list_filter = ("is_active", "unit", "category")
+
+
+@admin.register(ItemCategory)
+class ItemCategoryAdmin(admin.ModelAdmin):
+    list_display = ("code", "name", "is_active")
+    search_fields = ("code", "name")
+    list_filter = ("is_active",)
+
+
+@admin.register(UserSavedView)
+class UserSavedViewAdmin(admin.ModelAdmin):
+    list_display = ("user", "scope", "name", "is_default")
+    search_fields = ("user__username", "name")
+    list_filter = ("scope", "is_default")
 
 
 @admin.register(StockDocument)

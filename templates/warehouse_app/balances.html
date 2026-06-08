@@ -22,6 +22,17 @@
         <a class="chip{% if selected_preset == 'with_zero' %} active{% endif %}" href="?preset=with_zero">Все позиции</a>
         <a class="chip{% if selected_preset == 'nonzero' %} active{% endif %}" href="?preset=nonzero">Только с остатком</a>
     </nav>
+    {% if saved_views %}
+        <nav class="quick-filters" aria-label="Сохраненные фильтры остатков">
+            {% for saved_view in saved_views %}
+                <a class="chip" href="?{{ saved_view.query_params|urlencode_dict }}">{{ saved_view.name }}</a>
+                <form method="post" action="{% url 'saved_view_delete' saved_view.pk %}" class="inline-form">
+                    {% csrf_token %}
+                    <button type="submit" class="link-button" onclick="return confirm('Удалить сохраненное представление?');">Удалить</button>
+                </form>
+            {% endfor %}
+        </nav>
+    {% endif %}
     <form method="get" class="inline-filters" data-live-region="#balance-results" data-live-export="#balances-export-link">
         {% if selected_preset %}
             <input type="hidden" name="preset" value="{{ selected_preset }}">
@@ -41,6 +52,12 @@
                 <option value="{{ warehouse.pk }}" {% if selected_warehouse == warehouse.pk|stringformat:"s" %}selected{% endif %}>{{ warehouse.name }}</option>
             {% endfor %}
         </select>
+        <select name="category" data-live-change="1">
+            <option value="">Все категории</option>
+            {% for category in categories %}
+                <option value="{{ category.pk }}" {% if selected_category == category.pk|stringformat:"s" %}selected{% endif %}>{{ category.name }}</option>
+            {% endfor %}
+        </select>
         <select name="presentation" data-live-change="1">
             <option value="by_warehouse" {% if selected_presentation == "by_warehouse" %}selected{% endif %}>По складам</option>
             <option value="consolidated" {% if selected_presentation == "consolidated" %}selected{% endif %}>Сводно</option>
@@ -57,6 +74,19 @@
         </select>
         <button type="submit" class="button">Применить</button>
     </form>
+    {% if request.user.is_authenticated %}
+        <form method="post" action="{% url 'saved_view_create' 'balances' %}" class="inline-filters">
+            {% csrf_token %}
+            <input type="text" name="name" placeholder="Название представления" class="app-control">
+            <input type="hidden" name="q" value="{{ query }}">
+            <input type="hidden" name="warehouse" value="{{ selected_warehouse }}">
+            <input type="hidden" name="category" value="{{ selected_category }}">
+            <input type="hidden" name="presentation" value="{{ selected_presentation }}">
+            <input type="hidden" name="include_zero" value="{% if selected_include_zero %}1{% endif %}">
+            <input type="hidden" name="preset" value="{{ selected_preset }}">
+            <button type="submit" class="button">Сохранить фильтр</button>
+        </form>
+    {% endif %}
     <p class="muted">Режим “Сводно” суммирует остатки по выбранным складам. Режим “По складам” показывает отдельную строку по каждому складу. При необходимости можно включить нулевые позиции, чтобы видеть весь справочник.</p>
 </section>
 

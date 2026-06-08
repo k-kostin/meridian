@@ -292,6 +292,16 @@ a {
     margin-bottom: 14px;
 }
 
+.inline-form {
+    display: inline-flex;
+    align-items: center;
+}
+
+.quick-filters .link-button {
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
 .chip {
     display: inline-flex;
     align-items: center;

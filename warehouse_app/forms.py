@@ -6,6 +6,7 @@ from .models import (
     InventoryDocument,
     InventoryScope,
     Item,
+    ItemCategory,
     StockDocument,
     StockDocumentType,
     Unit,
@@ -54,6 +55,16 @@ class WarehouseForm(StyledFieldsMixin, forms.ModelForm):
         fields = ["code", "name", "is_active"]
 
 
+class ItemCategoryForm(StyledFieldsMixin, forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_field_styles()
+
+    class Meta:
+        model = ItemCategory
+        fields = ["code", "name", "is_active"]
+
+
 class ItemForm(StyledFieldsMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -61,7 +72,7 @@ class ItemForm(StyledFieldsMixin, forms.ModelForm):
 
     class Meta:
         model = Item
-        fields = ["sku", "name", "unit", "is_active", "notes"]
+        fields = ["sku", "name", "unit", "category", "is_active", "notes"]
 
 
 class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):

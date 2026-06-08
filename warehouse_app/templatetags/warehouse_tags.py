@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlencode
 
 from django import template
 
@@ -18,3 +19,10 @@ def quantity(value, places=3):
     quantizer = Decimal("1").scaleb(-places)
     normalized = decimal_value.quantize(quantizer)
     return f"{normalized:.{places}f}".replace(".", ",")
+
+
+@register.filter
+def urlencode_dict(value):
+    if not isinstance(value, dict):
+        return ""
+    return urlencode(value)
