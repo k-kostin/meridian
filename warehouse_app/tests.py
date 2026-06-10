@@ -318,7 +318,7 @@ class BackupViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(BackupRecord.objects.count(), 1)
         self.assertContains(response, "Резервная копия создана")
-        self.assertIn("Failed to record manual backup activity event", logs.output[0])
+        self.assertTrue(any("Failed to record manual backup activity event" in log for log in logs.output))
 
 
 @override_settings(DEMO_MODE=True)
