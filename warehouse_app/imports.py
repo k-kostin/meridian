@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import re
 from typing import BinaryIO
 
 from django.db import transaction
@@ -68,10 +69,10 @@ REQUIRED_COLUMNS = {
     "Единица": "Единица обязательна",
 }
 ITEM_COLUMN_ALIASES = {
-    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры"],
-    "Наименование": ["Наименование", "Название", "Номенклатура"],
-    "Единица": ["Единица", "Ед.изм.", "Ед изм", "Единица измерения"],
-    "Активна": ["Активна", "Активен", "Действует"],
+    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры", "Код товара", "Артикул товара"],
+    "Наименование": ["Наименование", "Название", "Номенклатура", "Наименование товара", "Наименование позиции", "Товар"],
+    "Единица": ["Единица", "Ед.изм.", "Ед изм", "Ед. изм.", "Единица измерения", "ЕИ", "Ед"],
+    "Активна": ["Активна", "Активен", "Действует", "Активность"],
     "Комментарий": ["Комментарий", "Примечание"],
 }
 OPENING_INVENTORY_REQUIRED_COLUMNS = {
@@ -80,11 +81,13 @@ OPENING_INVENTORY_REQUIRED_COLUMNS = {
     "Фактическое количество": "Фактическое количество обязательно",
 }
 OPENING_INVENTORY_COLUMN_ALIASES = {
-    "Склад": ["Склад", "Код склада", "Warehouse"],
-    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры"],
-    "Фактическое количество": ["Фактическое количество", "Количество", "Остаток", "Факт"],
+    "Склад": ["Склад", "Код склада", "Warehouse", "Warehouse code"],
+    "Артикул": ["Артикул", "SKU", "Код", "Код номенклатуры", "Код товара", "Артикул товара"],
+    "Фактическое количество": ["Фактическое количество", "Количество", "Остаток", "Факт", "Кол-во", "Кол во", "Qty", "Quantity", "Факт. остаток"],
     "Комментарий": ["Комментарий", "Примечание"],
 }
+ITEM_SHEET_ALIASES = ["Номенклатура", "Товары", "Справочник", "Items"]
+OPENING_INVENTORY_SHEET_ALIASES = ["Стартовые остатки", "Остатки", "Остатки склада", "Opening stock"]
 ITEM_IMPORT_MODE_CREATE_ONLY = "create_only"
 ITEM_IMPORT_MODE_UPDATE_EXISTING = "update_existing"
 ITEM_IMPORT_MODES = {ITEM_IMPORT_MODE_CREATE_ONLY, ITEM_IMPORT_MODE_UPDATE_EXISTING}
@@ -96,6 +99,11 @@ def _as_text(value) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip()
+
+
+def _normalized_lookup_key(value) -> str:
+    text = _as_text(value).casefold()
+    return re.sub(r"[^\w]+", "", text).replace("_", "")
 
 
 def _as_bool(value) -> bool:
@@ -116,11 +124,11 @@ def _as_decimal(value) -> tuple[Decimal, bool]:
 
 
 def _header_map(header_row) -> dict[str, int]:
-    return {_as_text(value).lower(): index for index, value in enumerate(header_row)}
+    return {_normalized_lookup_key(value): index for index, value in enumerate(header_row)}
 
 
 def _cell(row, headers: dict[str, int], column: str) -> str:
-    index = headers.get(column.lower())
+    index = headers.get(_normalized_lookup_key(column))
     if index is None or index >= len(row):
         return ""
     return _as_text(row[index])
@@ -128,7 +136,7 @@ def _cell(row, headers: dict[str, int], column: str) -> str:
 
 def _resolve_column_index(headers: dict[str, int], column: str, aliases: dict[str, list[str]]) -> int | None:
     for candidate in aliases.get(column, [column]):
-        index = headers.get(candidate.lower())
+        index = headers.get(_normalized_lookup_key(candidate))
         if index is not None:
             return index
     return None
@@ -155,10 +163,18 @@ def _required_cell(row, resolved_columns: dict[str, int | None], column: str) ->
     return ""
 
 
+def _select_sheet(workbook, sheet_aliases: list[str]):
+    alias_keys = {_normalized_lookup_key(alias) for alias in sheet_aliases}
+    for sheet_name in workbook.sheetnames:
+        if _normalized_lookup_key(sheet_name) in alias_keys:
+            return workbook[sheet_name]
+    return workbook.active
+
+
 def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
     workbook = load_workbook(file_obj, data_only=True, read_only=True)
     try:
-        sheet = workbook["Номенклатура"] if "Номенклатура" in workbook.sheetnames else workbook.active
+        sheet = _select_sheet(workbook, ITEM_SHEET_ALIASES)
         rows_iter = sheet.iter_rows(values_only=True)
         header_row = next(rows_iter, None)
         headers = _header_map(header_row or [])
@@ -199,7 +215,7 @@ def parse_items_import_workbook(file_obj: BinaryIO) -> ItemImportResult:
 def parse_opening_inventory_import_workbook(file_obj: BinaryIO) -> OpeningInventoryImportResult:
     workbook = load_workbook(file_obj, data_only=True, read_only=True)
     try:
-        sheet = workbook["Стартовые остатки"] if "Стартовые остатки" in workbook.sheetnames else workbook.active
+        sheet = _select_sheet(workbook, OPENING_INVENTORY_SHEET_ALIASES)
         rows_iter = sheet.iter_rows(values_only=True)
         header_row = next(rows_iter, None)
         headers = _header_map(header_row or [])
