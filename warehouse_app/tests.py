@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
-from .backups import BackupError, create_local_backup
+from .backups import BackupError, create_local_backup, create_pre_migration_backup_if_needed
 from .demo import seed_demo_data
 from .version import APP_VERSION_LABEL
 from .models import (
@@ -115,6 +115,17 @@ class LocalBackupServiceTests(TestCase):
                     kind=BackupKind.MANUAL,
                     app_version="v0.5.0-dev",
                 )
+
+    def test_create_pre_migration_backup_skips_missing_database(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": temp_path / "db.sqlite3"}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                record = create_pre_migration_backup_if_needed()
+
+        self.assertIsNone(record)
 
 
 class LocalBackupCommandTests(TestCase):

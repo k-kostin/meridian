@@ -45,6 +45,14 @@ def build_wsgi_application():
     if env_flag("WAREHOUSE_AUTO_MIGRATE", default=True):
         from django.core.management import call_command
 
+        from warehouse_app.backups import BackupError, create_pre_migration_backup_if_needed
+
+        try:
+            create_pre_migration_backup_if_needed()
+        except BackupError as exc:
+            print(f"Pre-migration backup failed: {exc}", file=sys.stderr)
+            raise
+
         call_command("migrate", interactive=False, verbosity=0)
 
     from config.wsgi import application
