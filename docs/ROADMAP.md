@@ -152,7 +152,7 @@ Deployment limits slice implemented: dashboard and docs explicitly state the sup
    - проверить импорт на 2-3 реальных клиентских или приближенных к реальным Excel-структурах;
    - улучшать alias/mapping только по фактическим файлам, а не по воображаемым ERP-сценариям.
 
-Status: intentionally deferred until after the Stage C audit/deployment gate and a separate user command.
+Synthetic validation slice implemented: parser and UI now cover realistic sheet names and header variants for item import and opening stock import. Final validation on real client files remains pending and should be done manually when real files are available.
 
 Не включать в этот этап:
 
@@ -543,7 +543,7 @@ SQLite начнет мешать, если:
    - user attribution;
    - audit hardening;
    - deployment limits;
-   - проверка реальных Excel-файлов остается отдельным следующим slice.
+   - synthetic Real Excel onboarding validation implemented; проверка настоящих клиентских Excel-файлов остается отдельным ручным шагом.
 2. Довести desktop packaging до надежного Windows installer flow.
 3. Только после этого добавлять легкую встроенную аналитику в браузере.
 4. При первых признаках реальной многопользовательской работы перейти на `PostgreSQL`.

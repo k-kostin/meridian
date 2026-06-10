@@ -92,8 +92,9 @@ class ItemImportPreviewForm(StyledFieldsMixin, forms.Form):
         super().__init__(*args, **kwargs)
         workbook_field = self.fields["workbook"]
         workbook_field.help_text = (
-            "Ожидается лист «Номенклатура» или активный лист. Поддерживаются колонки: "
-            "Артикул/SKU, Наименование/Название, Единица/Ед.изм., Активна, Комментарий."
+            "Ожидается лист «Номенклатура», «Товары», «Справочник», «Items» или активный лист. "
+            "Поддерживаются колонки: Артикул/SKU/Код товара, Наименование/Название/Товар, "
+            "Единица/Ед. изм., Активна/Активность, Комментарий/Примечание."
         )
         workbook_field.widget.attrs["accept"] = ".xlsx"
         self._apply_field_styles()
@@ -115,8 +116,9 @@ class OpeningInventoryImportForm(StyledFieldsMixin, forms.Form):
         super().__init__(*args, **kwargs)
         workbook_field = self.fields["workbook"]
         workbook_field.help_text = (
-            "Ожидается лист «Стартовые остатки» или активный лист. Поддерживаются колонки: "
-            "Склад/Код склада, Артикул/SKU, Фактическое количество/Остаток, Комментарий."
+            "Ожидается лист «Стартовые остатки», «Остатки», «Остатки склада», «Opening stock» или активный лист. "
+            "Поддерживаются колонки: Склад/Код склада, Артикул/SKU/Код товара, "
+            "Фактическое количество/Остаток/Кол-во/Qty, Комментарий/Примечание."
         )
         workbook_field.widget.attrs["accept"] = ".xlsx"
         self._apply_field_styles()

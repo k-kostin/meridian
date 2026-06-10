@@ -660,6 +660,28 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(result.rows[0].sku, "")
         self.assertIn("Артикул обязателен", [error.message for error in result.errors])
 
+    def test_parse_opening_inventory_import_workbook_accepts_realistic_sheet_and_headers(self):
+        from .imports import parse_opening_inventory_import_workbook
+
+        workbook = Workbook()
+        workbook.active.title = "README"
+        workbook.active.append(["Инструкция", "Не импортировать"])
+        sheet = workbook.create_sheet("Остатки")
+        sheet.append(["Код склада", "Код товара", "Кол-во", "Примечание"])
+        sheet.append([self.warehouse.code, self.item.sku, "7,25", "остаток из файла"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_opening_inventory_import_workbook(buffer)
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].warehouse_code, self.warehouse.code)
+        self.assertEqual(result.rows[0].sku, self.item.sku)
+        self.assertEqual(result.rows[0].actual_quantity, Decimal("7.25"))
+        self.assertEqual(result.rows[0].comment, "остаток из файла")
+
     def test_validate_opening_inventory_import_blocks_unknown_references_and_duplicates(self):
         from .imports import parse_opening_inventory_import_workbook, validate_opening_inventory_import_result
 
@@ -772,6 +794,28 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "ALIAS-001")
         self.assertNotContains(response, "Единица обязательна")
+
+    def test_parse_items_import_workbook_accepts_realistic_sheet_and_headers(self):
+        from .imports import parse_items_import_workbook
+
+        workbook = Workbook()
+        workbook.active.title = "README"
+        workbook.active.append(["Инструкция", "Не импортировать"])
+        sheet = workbook.create_sheet("Товары")
+        sheet.append(["Код товара", "Наименование товара", "Ед. изм.", "Активность", "Примечание"])
+        sheet.append(["REAL-ITEM-1", "Реальная позиция", self.unit.code, "да", "живой шаблон"])
+        buffer = BytesIO()
+        workbook.save(buffer)
+        buffer.seek(0)
+
+        result = parse_items_import_workbook(buffer)
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0].sku, "REAL-ITEM-1")
+        self.assertEqual(result.rows[0].name, "Реальная позиция")
+        self.assertEqual(result.rows[0].unit_code, self.unit.code)
+        self.assertEqual(result.rows[0].comment, "живой шаблон")
 
     def test_item_import_create_only_still_rejects_existing_sku(self):
         admin = User.objects.create_user(username="create-only-admin", password="pass")
