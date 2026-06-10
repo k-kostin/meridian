@@ -2792,6 +2792,96 @@ class UserAttributionModelTests(TestCase):
         self.assertTrue(events.filter(actor=self.user, actor_label="operator").exists())
 
 
+class UserAttributionViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="operator", password="pass")
+        UserProfile.objects.create(user=self.user, role=UserRole.OPERATOR)
+        self.unit = Unit.objects.create(code="pcs", name="Штука")
+        self.warehouse = Warehouse.objects.create(code="main", name="Основной склад")
+        self.item = Item.objects.create(sku="SKU-1", name="Позиция", unit=self.unit)
+        self.client.force_login(self.user)
+
+    def test_document_create_sets_created_and_updated_by(self):
+        response = self.client.post(
+            "/documents/new/?type=receipt",
+            {
+                "document_type": StockDocumentType.RECEIPT,
+                "warehouse": self.warehouse.pk,
+                "destination_warehouse": "",
+                "operation_date": "2026-06-10",
+                "comment": "",
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "0",
+                "lines-MIN_NUM_FORMS": "0",
+                "lines-MAX_NUM_FORMS": "1000",
+                "lines-0-item": self.item.pk,
+                "lines-0-quantity": "2",
+                "lines-0-comment": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        document = StockDocument.objects.get()
+        self.assertEqual(document.created_by, self.user)
+        self.assertEqual(document.updated_by, self.user)
+
+    def test_document_post_sets_posted_by(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 6, 10),
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("2"))
+
+        response = self.client.post(f"/documents/{document.pk}/post/")
+
+        self.assertEqual(response.status_code, 302)
+        document.refresh_from_db()
+        self.assertEqual(document.posted_by, self.user)
+
+    def test_inventory_create_sets_created_and_updated_by(self):
+        response = self.client.post(
+            "/inventories/new/",
+            {
+                "warehouse": self.warehouse.pk,
+                "inventory_date": "2026-06-10",
+                "scope": InventoryScope.PARTIAL,
+                "comment": "",
+                "lines-TOTAL_FORMS": "1",
+                "lines-INITIAL_FORMS": "0",
+                "lines-MIN_NUM_FORMS": "0",
+                "lines-MAX_NUM_FORMS": "1000",
+                "lines-0-item": self.item.pk,
+                "lines-0-actual_quantity": "2",
+                "lines-0-comment": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        inventory = InventoryDocument.objects.get()
+        self.assertEqual(inventory.created_by, self.user)
+        self.assertEqual(inventory.updated_by, self.user)
+
+    def test_inventory_post_sets_posted_by(self):
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 6, 10),
+            scope=InventoryScope.FULL,
+        )
+        InventoryLine.objects.create(
+            inventory=inventory,
+            item=self.item,
+            expected_quantity=Decimal("0"),
+            actual_quantity=Decimal("1"),
+        )
+
+        response = self.client.post(f"/inventories/{inventory.pk}/post/")
+
+        self.assertEqual(response.status_code, 302)
+        inventory.refresh_from_db()
+        self.assertEqual(inventory.posted_by, self.user)
+
+
 class DemoModeTests(TestCase):
     def test_seed_demo_data_creates_sample_records(self):
         summary = seed_demo_data()
