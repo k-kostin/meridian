@@ -2709,7 +2709,6 @@ class WarehouseFlowTests(TestCase):
         self.assertIn("Ошибка сохранения", content)
 
 
-@override_settings(DEMO_MODE=True)
 class UserAttributionModelTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="operator", password="pass")
@@ -2919,6 +2918,7 @@ class UserAttributionViewTests(TestCase):
         self.assertContains(response, "operator")
 
 
+@override_settings(DEMO_MODE=True)
 class DemoModeTests(TestCase):
     def test_seed_demo_data_creates_sample_records(self):
         summary = seed_demo_data()
