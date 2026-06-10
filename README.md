@@ -11,11 +11,15 @@ The project is intentionally compact:
 - spreadsheet exports;
 - desktop packaging experiments around a Python sidecar.
 
+Meridian is not intended to be a full ERP, accounting system, POS, marketplace connector, or enterprise WMS. The near-term target is a small local warehouse desk for spreadsheet-first operations that need document-based stock accounting without adopting a large system.
+
 ## Status
 
 This repository starts from the `v0.1 MVP Baseline` and is now evolving through controlled hardening slices.
 
-The baseline is useful for local demo and pilot-style evaluation, but it is not production-complete. Current work adds activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, Excel nomenclature import for creating new items after preview/validation, and opening stock import through draft full inventory documents. Remaining gaps include production-grade RBAC, user-defined saved views, and installer validation.
+The project has closed `v0.4.0` Stage B operational contour work: activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, Excel nomenclature import with preview/validation, opening stock import through draft full inventory documents, item categories, category-aware filters, and saved views for key lists.
+
+The project is useful for local demo and pilot-style evaluation, but it is not production-complete. Remaining commercial-readiness gaps include backup/restore, user attribution in operational history, Windows installer validation, explicit SQLite deployment limits, and broader desktop update/migration safety.
 
 ## Local Development
 
