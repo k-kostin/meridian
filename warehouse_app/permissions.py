@@ -40,6 +40,10 @@ def can_reset_demo(user) -> bool:
     return get_user_role(user) == UserRole.ADMIN
 
 
+def can_manage_backups(user) -> bool:
+    return get_user_role(user) == UserRole.ADMIN
+
+
 def require_reference_manager(view_func):
     @wraps(view_func)
     def wrapper(request: HttpRequest, *args, **kwargs):
@@ -65,6 +69,16 @@ def require_demo_admin(view_func):
     def wrapper(request: HttpRequest, *args, **kwargs):
         if not can_reset_demo(request.user):
             raise PermissionDenied("Недостаточно прав для перезагрузки демо-данных.")
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+def require_backup_manager(view_func):
+    @wraps(view_func)
+    def wrapper(request: HttpRequest, *args, **kwargs):
+        if not can_manage_backups(request.user):
+            raise PermissionDenied("Недостаточно прав для управления резервными копиями.")
         return view_func(request, *args, **kwargs)
 
     return wrapper

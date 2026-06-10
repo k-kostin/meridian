@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
@@ -7,7 +8,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Q
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import Resolver404, resolve, reverse
 from django.utils.dateparse import parse_date
@@ -15,6 +16,7 @@ from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
 from .activity import get_document_timeline, get_inventory_timeline
+from .backups import BackupError, configured_backup_paths, create_local_backup
 from .forms import (
     InventoryDocumentForm,
     InventoryLineFormSet,
@@ -39,6 +41,7 @@ from .imports import (
 )
 from .demo import has_business_data, seed_demo_data
 from .models import (
+    BackupRecord,
     DocumentStatus,
     InventoryDocument,
     InventoryLine,
@@ -53,7 +56,13 @@ from .models import (
     UserSavedView,
     Warehouse,
 )
-from .permissions import can_manage_references, require_demo_admin, require_reference_manager, require_stock_operator
+from .permissions import (
+    can_manage_references,
+    require_backup_manager,
+    require_demo_admin,
+    require_reference_manager,
+    require_stock_operator,
+)
 from .services import (
     PRESENTATION_BY_WAREHOUSE,
     PRESENTATION_CONSOLIDATED,
@@ -821,6 +830,45 @@ def inventory_post(request: HttpRequest, pk: int) -> HttpResponse:
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
     return redirect("inventory_detail", pk=inventory.pk)
+
+
+@require_backup_manager
+def backup_list(request: HttpRequest) -> HttpResponse:
+    paths = configured_backup_paths()
+    records = BackupRecord.objects.select_related("created_by")[:50]
+    return render(
+        request,
+        "warehouse_app/backup_list.html",
+        {
+            "records": records,
+            "database_path": paths.database_path,
+            "backup_dir": paths.backup_dir,
+        },
+    )
+
+
+@require_backup_manager
+def backup_create(request: HttpRequest) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("backup_list")
+
+    try:
+        create_local_backup(message="Manual backup created from web UI.", created_by=request.user)
+    except BackupError as exc:
+        messages.error(request, str(exc))
+    else:
+        messages.success(request, "Резервная копия создана.")
+
+    return redirect("backup_list")
+
+
+@require_backup_manager
+def backup_download(request: HttpRequest, pk: int) -> FileResponse:
+    record = get_object_or_404(BackupRecord, pk=pk)
+    path = Path(record.backup_path)
+    if not path.exists() or not path.is_file():
+        raise Http404("Backup file not found.")
+    return FileResponse(path.open("rb"), as_attachment=True, filename=path.name)
 
 
 def balance_report(request: HttpRequest) -> HttpResponse:

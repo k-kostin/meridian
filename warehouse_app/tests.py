@@ -11,6 +11,7 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
@@ -138,6 +139,40 @@ class LocalBackupCommandTests(TestCase):
     def test_restore_local_backup_requires_confirm(self):
         with self.assertRaises(CommandError):
             call_command("restore_local_backup", "/tmp/example.sqlite3", verbosity=0)
+
+
+class BackupViewTests(TestCase):
+    def test_viewer_cannot_open_backup_list(self):
+        user = User.objects.create_user(username="viewer", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("backup_list"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_create_backup_from_ui(self):
+        user = User.objects.create_user(username="admin", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.ADMIN)
+        self.client.force_login(user)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                response = self.client.post(reverse("backup_create"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(BackupRecord.objects.count(), 1)
+        self.assertContains(response, "Резервная копия создана")
 
 
 @override_settings(DEMO_MODE=True)

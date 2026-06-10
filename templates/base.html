@@ -34,6 +34,7 @@
                     <span class="nav-group-title">Обзор</span>
                     <a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Панель</a>
                     <a href="{% url 'setup' %}" class="{% if request.resolver_match.url_name == 'setup' %}active{% endif %}">Первичная настройка</a>
+                    <a href="{% url 'backup_list' %}" class="{% if request.resolver_match.url_name == 'backup_list' %}active{% endif %}">Резервные копии</a>
                 </div>
                 <div class="nav-group">
                     <span class="nav-group-title">Справочники</span>
