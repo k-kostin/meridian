@@ -11,6 +11,9 @@
                             {{ event.created_at|date:"d.m.Y H:i" }}
                             · {{ event.warehouse.name }}
                             · {{ event.get_event_type_display }}
+                            {% if event.actor_label %}
+                                · Пользователь: {{ event.actor_label }}
+                            {% endif %}
                         </p>
                     </div>
                 </li>

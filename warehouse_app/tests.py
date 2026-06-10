@@ -2881,6 +2881,43 @@ class UserAttributionViewTests(TestCase):
         inventory.refresh_from_db()
         self.assertEqual(inventory.posted_by, self.user)
 
+    def test_document_detail_shows_posted_by_user(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 6, 10),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("2"))
+        document.post(posted_by=self.user)
+
+        response = self.client.get(f"/documents/{document.pk}/")
+
+        self.assertContains(response, "Провел")
+        self.assertContains(response, "operator")
+
+    def test_inventory_detail_shows_posted_by_user(self):
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 6, 10),
+            scope=InventoryScope.FULL,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        InventoryLine.objects.create(
+            inventory=inventory,
+            item=self.item,
+            expected_quantity=Decimal("0"),
+            actual_quantity=Decimal("1"),
+        )
+        inventory.post(posted_by=self.user)
+
+        response = self.client.get(f"/inventories/{inventory.pk}/")
+
+        self.assertContains(response, "Провел")
+        self.assertContains(response, "operator")
+
 
 class DemoModeTests(TestCase):
     def test_seed_demo_data_creates_sample_records(self):
