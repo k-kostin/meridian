@@ -1,6 +1,6 @@
 # STATUS.md
 
-Снимок проекта на 2026-06-08.
+Снимок проекта на 2026-06-10.
 
 ## Version Baseline
 
@@ -8,9 +8,9 @@
 - Current development state: Stage B operational contour is closed and released as `v0.4.0`.
 - Stage A stabilization audit: passed on 2026-06-04.
 - Stage B operational contour audit: passed on 2026-06-08.
-- Next development focus: Stage C built-in analytics.
+- Next development focus: Stage C commercial pilot readiness.
 - UI/package version: `v0.4.0`.
-- Future milestone targets: `v0.5.0` for built-in analytics, `v0.6.0` for desktop packaging, and `v1.0.0` only for the first stable pilot/production-ready release.
+- Future milestone targets: `v0.5.0` for commercial pilot readiness, `v0.6.0` for desktop packaging reliability, `v0.7.0` for focused operational analytics, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
 
 ## Что сейчас работает
@@ -23,7 +23,7 @@
 - demo mode с явной перезагрузкой набора и confirm-предупреждением;
 - защита admin от редактирования проведенных документов;
 - retry-based генерация номеров документов и инвентаризаций с опорой на unique constraint;
-- проведение документов и инвентаризаций с `select_for_update()` и lock по складу;
+- проведение документов и инвентаризаций с доменными транзакциями и lock-подходом по складу;
 - текущие остатки;
 - расширенные текущие остатки: `приход всего / уход всего / остаток`;
 - опция показа нулевых позиций на текущих остатках и в их Excel-выгрузке;
@@ -201,6 +201,9 @@ python manage.py test
 ## Известные ограничения
 
 - нет расширенного импорта стартовых остатков для нескольких складов в одном файле;
+- нет user attribution в операционной истории: видно событие, но не полноценное "кто сделал";
+- нет встроенного backup/restore UI и автоматического backup перед миграциями/обновлениями;
+- SQLite остается local/demo/pilot backend; production-grade многопользовательская работа не заявлена;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
@@ -209,9 +212,10 @@ python manage.py test
 
 ## Рекомендуемые следующие шаги
 
-1. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
-2. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
-3. Begin Stage C built-in analytics work.
-4. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
-5. Решить, нужны ли контрагенты, цены и дополнительные документы поверх текущего складского ядра.
-6. Решить, нужно ли расширять сохраненные представления до default view, sharing и прав доступа.
+1. Начать Stage C commercial pilot readiness: backup/restore, user attribution, audit hardening, deployment limits.
+2. Проверить реальные или приближенные к реальным Excel-файлы для onboarding/import flow.
+3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
+4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
+5. После этого вернуться к focused operational analytics.
+6. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
+7. Решить, нужны ли контрагенты, цены, barcode/labels и связь со сбытом, но только после реального клиентского сигнала.
