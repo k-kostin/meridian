@@ -143,6 +143,11 @@ class ActivityEventType(models.TextChoices):
     STOCK_DOCUMENT_POSTED = "stock_document_posted", "Документ проведен"
     INVENTORY_POSTED = "inventory_posted", "Инвентаризация проведена"
     INVENTORY_ADJUSTMENT_CREATED = "inventory_adjustment_created", "Автокорректировка создана"
+    ITEM_IMPORT_COMMITTED = "item_import_committed", "Импорт номенклатуры выполнен"
+    OPENING_INVENTORY_IMPORT_COMMITTED = "opening_inventory_import_committed", "Импорт стартовых остатков выполнен"
+    MANUAL_BACKUP_CREATED = "manual_backup_created", "Резервная копия создана"
+    DEMO_DATA_RESET = "demo_data_reset", "Демо-данные перезагружены"
+    REFERENCE_RECORD_CHANGED = "reference_record_changed", "Справочник изменен"
 
 
 NUMBER_GENERATION_ATTEMPTS = 8
@@ -560,9 +565,11 @@ class ActivityEvent(TimeStampedModel):
     event_type = models.CharField("Тип события", max_length=40, choices=ActivityEventType.choices)
     warehouse = models.ForeignKey(
         Warehouse,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name="activity_events",
         verbose_name="Склад",
+        null=True,
+        blank=True,
     )
     stock_document = models.ForeignKey(
         StockDocument,

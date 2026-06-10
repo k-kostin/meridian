@@ -133,7 +133,9 @@ First slice implemented: local manual backup, restore command, and pre-migration
    - кто провел документ или инвентаризацию;
    - кто перезагрузил demo/import data, если действие доступно.
 
-First slice implemented: creator/updater/poster fields for stock documents and inventory documents, plus actor labels on posting timeline events. Import commit, demo reload, reference-edit attribution and immutable audit semantics remain audit-hardening work.
+First slice implemented: creator/updater/poster fields for stock documents and inventory documents, plus actor labels on posting timeline events.
+
+Audit hardening slice implemented: `ActivityEvent` now records successful item import commits, opening inventory import commits, manual backup creation, demo data load/reset and reference record changes. This is a pilot-grade operational trail, not an immutable or security-grade audit log.
 
 3. Audit hardening:
    - текущий `ActivityEvent` расширить до operational audit trail для пилота;
@@ -143,9 +145,14 @@ First slice implemented: creator/updater/poster fields for stock documents and i
    - не обещать полноценную одновременную многопользовательскую работу на SQLite;
    - для реального multiuser path отдельно планировать PostgreSQL/server deployment;
    - оформить границу между `Local Single User` и будущим `Team / Multi-User` профилем без развилки доменной логики.
+
+Deployment limits slice implemented: dashboard and docs explicitly state the supported Local Single User profile: SQLite, one local computer, one active operator. Team / Multi-User remains a future server/PostgreSQL profile using the same domain core.
+
 5. Real Excel onboarding validation:
    - проверить импорт на 2-3 реальных клиентских или приближенных к реальным Excel-структурах;
    - улучшать alias/mapping только по фактическим файлам, а не по воображаемым ERP-сценариям.
+
+Status: intentionally deferred until after the Stage C audit/deployment gate and a separate user command.
 
 Не включать в этот этап:
 
@@ -536,7 +543,7 @@ SQLite начнет мешать, если:
    - user attribution;
    - audit hardening;
    - deployment limits;
-   - проверка реальных Excel-файлов.
+   - проверка реальных Excel-файлов остается отдельным следующим slice.
 2. Довести desktop packaging до надежного Windows installer flow.
 3. Только после этого добавлять легкую встроенную аналитику в браузере.
 4. При первых признаках реальной многопользовательской работы перейти на `PostgreSQL`.

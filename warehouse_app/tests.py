@@ -268,6 +268,32 @@ class BackupViewTests(TestCase):
         self.assertEqual(BackupRecord.objects.count(), 1)
         self.assertContains(response, "Резервная копия создана")
 
+    def test_admin_backup_create_records_operational_activity(self):
+        user = User.objects.create_user(username="admin-backup-audit", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.ADMIN)
+        self.client.force_login(user)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                response = self.client.post(reverse("backup_create"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        event = ActivityEvent.objects.get(event_type=ActivityEventType.MANUAL_BACKUP_CREATED)
+        self.assertEqual(event.actor, user)
+        self.assertEqual(event.actor_label, "admin-backup-audit")
+        self.assertEqual(event.metadata["backup_kind"], BackupKind.MANUAL)
+        self.assertIn("backup_id", event.metadata)
+
 
 @override_settings(DEMO_MODE=True)
 class WarehouseFlowTests(TestCase):
@@ -753,6 +779,24 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(self.item.notes, "обновлено")
         self.assertContains(response, "Импорт обновил позиций: 1")
 
+    def test_item_import_commit_records_operational_activity(self):
+        admin = User.objects.create_user(username="admin-import-audit", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [["SKU-AUDIT-1", "Импорт с аудитом", self.unit.code, "да", ""]]
+        )
+
+        response = self.client.post("/items/import/", {"action": "commit", "workbook": workbook})
+
+        self.assertRedirects(response, "/items/")
+        event = ActivityEvent.objects.get(event_type=ActivityEventType.ITEM_IMPORT_COMMITTED)
+        self.assertEqual(event.actor, admin)
+        self.assertEqual(event.actor_label, "admin-import-audit")
+        self.assertEqual(event.metadata["created_count"], 1)
+        self.assertEqual(event.metadata["updated_count"], 0)
+        self.assertEqual(event.metadata["import_mode"], "create_only")
+
     def test_item_import_update_mode_rejects_new_sku(self):
         admin = User.objects.create_user(username="update-mode-new-sku-admin", password="pass")
         UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
@@ -1038,6 +1082,23 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(inventory.status, DocumentStatus.DRAFT)
         self.assertEqual(inventory.scope, InventoryScope.FULL)
         self.assertEqual(inventory.lines.count(), 1)
+
+    def test_opening_inventory_import_commit_records_operational_activity(self):
+        operator = User.objects.create_user(username="operator-opening-import-audit", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+        workbook = self._opening_inventory_workbook_upload([[self.warehouse.code, self.item.sku, 7, "commit"]])
+
+        response = self.client.post("/inventories/import-opening/", {"action": "commit", "workbook": workbook})
+
+        inventory = InventoryDocument.objects.get()
+        self.assertRedirects(response, f"/inventories/{inventory.pk}/")
+        event = ActivityEvent.objects.get(event_type=ActivityEventType.OPENING_INVENTORY_IMPORT_COMMITTED)
+        self.assertEqual(event.actor, operator)
+        self.assertEqual(event.actor_label, "operator-opening-import-audit")
+        self.assertEqual(event.inventory_document, inventory)
+        self.assertEqual(event.warehouse, self.warehouse)
+        self.assertEqual(event.metadata["created_lines_count"], 1)
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(
@@ -2438,6 +2499,30 @@ class WarehouseFlowTests(TestCase):
         self.assertContains(response, "Точность")
         self.assertContains(response, "<td>3</td>", html=True)
 
+    def test_reference_create_and_update_record_operational_activity(self):
+        admin = User.objects.create_user(username="admin-reference-audit", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+
+        create_response = self.client.post(
+            "/units/",
+            {"code": "box", "name": "Коробка", "display_precision": "0"},
+        )
+        self.assertRedirects(create_response, "/units/")
+        unit = Unit.objects.get(code="box")
+
+        update_response = self.client.post(
+            f"/units/{unit.pk}/edit/",
+            {"code": "box", "name": "Коробка обновленная", "display_precision": "0"},
+        )
+        self.assertRedirects(update_response, "/units/")
+
+        events = ActivityEvent.objects.filter(event_type=ActivityEventType.REFERENCE_RECORD_CHANGED).order_by("id")
+        self.assertEqual(events.count(), 2)
+        self.assertEqual([event.metadata["action"] for event in events], ["created", "updated"])
+        self.assertEqual([event.metadata["model"] for event in events], ["Unit", "Unit"])
+        self.assertEqual(events[0].actor, admin)
+
     def test_document_form_shows_quantity_hint_near_table_header(self):
         response = self.client.get("/documents/new/", {"type": "adjustment"})
 
@@ -2657,6 +2742,16 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, APP_VERSION_LABEL)
+
+    def test_dashboard_exposes_local_single_user_deployment_limits(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Local Single User")
+        self.assertContains(response, "SQLite")
+        self.assertContains(response, "один локальный компьютер")
+        self.assertContains(response, "один активный оператор")
+        self.assertContains(response, "не режим одновременной многопользовательской работы")
 
     def test_brand_links_to_dashboard_and_empty_states_suggest_next_action(self):
         response = self.client.get("/")
@@ -2961,6 +3056,14 @@ class DemoModeTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response["Location"], "/")
         self.assertTrue(Item.objects.exists())
+
+    def test_demo_load_view_records_operational_activity(self):
+        response = self.client.post("/demo/load/", {"next": "/"})
+
+        self.assertEqual(response.status_code, 302)
+        event = ActivityEvent.objects.get(event_type=ActivityEventType.DEMO_DATA_RESET)
+        self.assertEqual(event.metadata["reset_performed"], False)
+        self.assertEqual(event.metadata["items"], 30)
 
     def test_demo_load_view_reloads_existing_demo_dataset(self):
         seed_demo_data()

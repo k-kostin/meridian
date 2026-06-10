@@ -15,7 +15,15 @@ from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_POST
 
-from .activity import get_document_timeline, get_inventory_timeline
+from .activity import (
+    get_document_timeline,
+    get_inventory_timeline,
+    record_demo_data_reset,
+    record_item_import_committed,
+    record_manual_backup_created,
+    record_opening_inventory_import_committed,
+    record_reference_record_changed,
+)
 from .backups import BackupError, configured_backup_paths, create_local_backup
 from .forms import (
     InventoryDocumentForm,
@@ -255,7 +263,8 @@ def unit_list(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and not can_manage_references(request.user):
         raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        unit = form.save()
+        record_reference_record_changed(instance=unit, action="created", actor=authenticated_actor(request))
         messages.success(request, "Единица измерения добавлена.")
         return redirect("unit_list")
     return render(
@@ -278,7 +287,8 @@ def unit_update(request: HttpRequest, pk: int) -> HttpResponse:
     unit = get_object_or_404(Unit, pk=pk)
     form = UnitForm(request.POST or None, instance=unit)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        unit = form.save()
+        record_reference_record_changed(instance=unit, action="updated", actor=authenticated_actor(request))
         messages.success(request, "Единица измерения обновлена.")
         return redirect("unit_list")
     return render(
@@ -299,7 +309,8 @@ def warehouse_list(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and not can_manage_references(request.user):
         raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        warehouse = form.save()
+        record_reference_record_changed(instance=warehouse, action="created", actor=authenticated_actor(request))
         messages.success(request, "Склад добавлен.")
         return redirect("warehouse_list")
     return render(
@@ -322,7 +333,8 @@ def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
     warehouse = get_object_or_404(Warehouse, pk=pk)
     form = WarehouseForm(request.POST or None, instance=warehouse)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        warehouse = form.save()
+        record_reference_record_changed(instance=warehouse, action="updated", actor=authenticated_actor(request))
         messages.success(request, "Склад обновлен.")
         return redirect("warehouse_list")
     return render(
@@ -337,7 +349,8 @@ def category_list(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and not can_manage_references(request.user):
         raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        category = form.save()
+        record_reference_record_changed(instance=category, action="created", actor=authenticated_actor(request))
         messages.success(request, "Категория добавлена.")
         return redirect("category_list")
     categories = ItemCategory.objects.annotate(items_count=Count("items", distinct=True)).order_by("name", "code")
@@ -353,7 +366,8 @@ def category_update(request: HttpRequest, pk: int) -> HttpResponse:
     category = get_object_or_404(ItemCategory, pk=pk)
     form = ItemCategoryForm(request.POST or None, instance=category)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        category = form.save()
+        record_reference_record_changed(instance=category, action="updated", actor=authenticated_actor(request))
         messages.success(request, "Категория обновлена.")
         return redirect("category_list")
     return render(
@@ -377,7 +391,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and not can_manage_references(request.user):
         raise PermissionDenied("Недостаточно прав для изменения справочников.")
     if request.method == "POST" and form.is_valid():
-        form.save()
+        item = form.save()
+        record_reference_record_changed(instance=item, action="created", actor=authenticated_actor(request))
         messages.success(request, "Номенклатура добавлена.")
         return redirect("item_list")
 
@@ -419,6 +434,13 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
                 )
                 result = ItemImportResult(rows=parsed_result.rows, errors=commit_result.errors)
                 if not commit_result.errors:
+                    record_item_import_committed(
+                        created_count=commit_result.created_count,
+                        updated_count=commit_result.updated_count,
+                        import_mode=import_mode,
+                        auto_create_units=auto_create_units,
+                        actor=authenticated_actor(request),
+                    )
                     if commit_result.created_count:
                         messages.success(request, f"Импортировано позиций: {commit_result.created_count}.")
                     if commit_result.updated_count:
@@ -452,7 +474,8 @@ def item_update(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(Item, pk=pk)
     form = ItemForm(request.POST or None, instance=item)
     if request.method == "POST" and form.is_valid():
-        form.save()
+        item = form.save()
+        record_reference_record_changed(instance=item, action="updated", actor=authenticated_actor(request))
         messages.success(request, "Позиция обновлена.")
         return redirect("item_list")
     return render(
@@ -729,6 +752,11 @@ def opening_inventory_import_preview(request: HttpRequest) -> HttpResponse:
                 commit_result = commit_opening_inventory_import(parsed_result)
                 result = OpeningInventoryImportResult(rows=parsed_result.rows, errors=commit_result.errors)
                 if commit_result.inventory and not commit_result.errors:
+                    record_opening_inventory_import_committed(
+                        inventory=commit_result.inventory,
+                        created_lines_count=commit_result.created_lines_count,
+                        actor=authenticated_actor(request),
+                    )
                     messages.success(
                         request,
                         f"Создан черновик инвентаризации {commit_result.inventory.number}. "
@@ -887,7 +915,8 @@ def backup_create(request: HttpRequest) -> HttpResponse:
         return redirect("backup_list")
 
     try:
-        create_local_backup(message="Manual backup created from web UI.", created_by=request.user)
+        record = create_local_backup(message="Manual backup created from web UI.", created_by=request.user)
+        record_manual_backup_created(backup_record=record, actor=authenticated_actor(request))
     except BackupError as exc:
         messages.error(request, str(exc))
     else:
@@ -1245,6 +1274,11 @@ def demo_load(request: HttpRequest) -> HttpResponse:
     try:
         had_data = has_business_data()
         summary = seed_demo_data(force_reset=had_data)
+        record_demo_data_reset(
+            summary=summary,
+            reset_performed=had_data,
+            actor=authenticated_actor(request),
+        )
         redirect_to = _resolve_demo_redirect(requested_next, reset_performed=had_data)
         prefix = "Демо-данные перезагружены: " if had_data else "Демо-данные загружены: "
         message_text = (
