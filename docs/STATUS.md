@@ -48,6 +48,10 @@
 - карточки черновиков на dashboard кликабельны и ведут сразу в отфильтрованные списки;
 - проведение документа и инвентаризации требует подтверждения пользователя;
 - операционная история событий на деталях документов движения и инвентаризаций;
+- core operation user attribution для документов движения, инвентаризаций и событий проведения:
+  - `created_by / updated_by / posted_by` на документах движения;
+  - `created_by / updated_by / posted_by` на инвентаризациях;
+  - actor label в истории проведения;
 - из журнала документов можно сразу создать приход, расход, корректировку и перемещение;
 - черновики документов и инвентаризаций можно редактировать до проведения;
 - типы документов в журнале выделены визуальными badge-маркерами;
@@ -204,7 +208,7 @@ python manage.py test
 ## Известные ограничения
 
 - нет расширенного импорта стартовых остатков для нескольких складов в одном файле;
-- нет user attribution в операционной истории: видно событие, но не полноценное "кто сделал";
+- import/demo/reference-edit attribution и security-grade immutable audit log не реализованы;
 - нет web restore UI, scheduled backups, encryption и cloud backup;
 - SQLite остается local/demo/pilot backend для `Local Single User` профиля; production-grade многопользовательская работа не заявлена;
 - `Team / Multi-User` профиль пока не реализован: для него нужен отдельный server/PostgreSQL deployment path, но не отдельное доменное ядро;
@@ -212,11 +216,11 @@ python manage.py test
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
 - сохраненные представления пока есть только для документов движения и текущих остатков; выбор default view, sharing и управление правами сохраненных представлений не реализованы.
-- enterprise RBAC не реализован: нет object-level permissions, приглашений, password reset и user attribution в операционной истории.
+- enterprise RBAC не реализован: нет object-level permissions, приглашений, password reset и security-grade audit log.
 
 ## Рекомендуемые следующие шаги
 
-1. Продолжить Stage C commercial pilot readiness для `Local Single User` профиля: user attribution, audit hardening, deployment limits.
+1. Продолжить Stage C commercial pilot readiness для `Local Single User` профиля: audit hardening, deployment limits и реальные onboarding/import проверки.
 2. Проверить реальные или приближенные к реальным Excel-файлы для onboarding/import flow.
 3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.

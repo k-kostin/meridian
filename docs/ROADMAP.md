@@ -132,6 +132,9 @@ First slice implemented: local manual backup, restore command, and pre-migration
    - кто изменил черновик;
    - кто провел документ или инвентаризацию;
    - кто перезагрузил demo/import data, если действие доступно.
+
+First slice implemented: creator/updater/poster fields for stock documents and inventory documents, plus actor labels on posting timeline events. Import commit, demo reload, reference-edit attribution and immutable audit semantics remain audit-hardening work.
+
 3. Audit hardening:
    - текущий `ActivityEvent` расширить до operational audit trail для пилота;
    - не обещать security-grade audit log без отдельного проекта.

@@ -41,7 +41,8 @@
 - `ActivityEvent`
   - хранит компактную историю складо-влияющих событий;
   - не является security audit log;
-  - пока не содержит полноценного user attribution, но это обязательный commercial pilot readiness gap.
+  - содержит pilot-grade actor attribution для событий проведения, если действие выполнено авторизованным пользователем;
+  - не закрывает import/demo/reference-edit attribution и не заменяет immutable audit log.
 - `UserProfile`
   - хранит простую роль пользователя: admin, operator или viewer;
   - не является workspace/account model и не реализует object-level permissions.
@@ -96,6 +97,8 @@
 - Desktop-shell не должен переносить в себя доменные правила и отчетную логику; он только поднимает локальный контур и открывает окно.
 - Встроенные quick-filter presets остаются view-level настройками URL-параметров. Пользовательские сохраненные представления, если появятся позже, должны проектироваться отдельно после ролей и модели владения.
 - Ролевые ограничения должны проверяться на сервере. Template-гейтинг используется только для UX и не считается защитой сам по себе.
+- User attribution является операционной метаинформацией для пилота, а не security-grade immutable audit log.
+- Anonymous local/demo flows оставляют attribution nullable, чтобы сохранить single-computer demo/desktop совместимость.
 
 ## Deployment Boundaries
 
