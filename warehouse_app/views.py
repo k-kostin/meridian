@@ -138,6 +138,10 @@ def _saved_views_for_user(request: HttpRequest, scope: str):
     return UserSavedView.objects.filter(user=request.user, scope=scope)
 
 
+def authenticated_actor(request: HttpRequest):
+    return request.user if request.user.is_authenticated else None
+
+
 def _get_clean_id(request: HttpRequest, key: str) -> str | None:
     value = request.GET.get(key)
     return value if value and value.isdigit() else None
@@ -578,7 +582,12 @@ def document_create(request: HttpRequest) -> HttpResponse:
         formset = StockLineFormSet(request.POST, prefix="lines")
         if form.is_valid() and formset.is_valid():
             with transaction.atomic():
-                document = form.save()
+                document = form.save(commit=False)
+                actor = authenticated_actor(request)
+                if actor:
+                    document.created_by = actor
+                    document.updated_by = actor
+                document.save()
                 _save_stock_lines(document, formset)
             messages.success(request, "Документ сохранен как черновик.")
             return redirect("document_detail", pk=document.pk)
@@ -610,7 +619,11 @@ def document_update(request: HttpRequest, pk: int) -> HttpResponse:
         formset = StockLineFormSet(request.POST, prefix="lines")
         if form.is_valid() and formset.is_valid():
             with transaction.atomic():
-                document = form.save()
+                document = form.save(commit=False)
+                actor = authenticated_actor(request)
+                if actor:
+                    document.updated_by = actor
+                document.save()
                 document.lines.all().delete()
                 _save_stock_lines(document, formset)
             messages.success(request, "Черновик документа обновлен.")
@@ -633,7 +646,14 @@ def document_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 def document_detail(request: HttpRequest, pk: int) -> HttpResponse:
     document = get_object_or_404(
-        StockDocument.objects.select_related("warehouse", "destination_warehouse", "source_inventory").prefetch_related("lines__item__unit"),
+        StockDocument.objects.select_related(
+            "warehouse",
+            "destination_warehouse",
+            "source_inventory",
+            "created_by",
+            "updated_by",
+            "posted_by",
+        ).prefetch_related("lines__item__unit"),
         pk=pk,
     )
     return render(
@@ -651,7 +671,7 @@ def document_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def document_post(request: HttpRequest, pk: int) -> HttpResponse:
     document = get_object_or_404(StockDocument, pk=pk)
     try:
-        document.post()
+        document.post(posted_by=authenticated_actor(request))
         messages.success(request, "Документ проведен.")
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))
@@ -747,7 +767,12 @@ def inventory_create(request: HttpRequest) -> HttpResponse:
         formset = InventoryLineFormSet(request.POST, prefix="lines")
         if form.is_valid() and formset.is_valid():
             with transaction.atomic():
-                inventory = form.save()
+                inventory = form.save(commit=False)
+                actor = authenticated_actor(request)
+                if actor:
+                    inventory.created_by = actor
+                    inventory.updated_by = actor
+                inventory.save()
                 _save_inventory_lines(inventory, formset)
             messages.success(request, "Инвентаризация сохранена как черновик.")
             return redirect("inventory_detail", pk=inventory.pk)
@@ -781,7 +806,11 @@ def inventory_update(request: HttpRequest, pk: int) -> HttpResponse:
         formset = InventoryLineFormSet(request.POST, prefix="lines")
         if form.is_valid() and formset.is_valid():
             with transaction.atomic():
-                inventory = form.save()
+                inventory = form.save(commit=False)
+                actor = authenticated_actor(request)
+                if actor:
+                    inventory.updated_by = actor
+                inventory.save()
                 inventory.lines.all().delete()
                 _save_inventory_lines(inventory, formset)
             messages.success(request, "Черновик инвентаризации обновлен.")
@@ -805,7 +834,12 @@ def inventory_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
     inventory = get_object_or_404(
-        InventoryDocument.objects.select_related("warehouse").prefetch_related("lines__item__unit", "generated_documents"),
+        InventoryDocument.objects.select_related(
+            "warehouse",
+            "created_by",
+            "updated_by",
+            "posted_by",
+        ).prefetch_related("lines__item__unit", "generated_documents"),
         pk=pk,
     )
     adjustment = inventory.generated_documents.order_by("id").first()
@@ -825,7 +859,7 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
 def inventory_post(request: HttpRequest, pk: int) -> HttpResponse:
     inventory = get_object_or_404(InventoryDocument, pk=pk)
     try:
-        inventory.post()
+        inventory.post(posted_by=authenticated_actor(request))
         messages.success(request, "Инвентаризация проведена, корректировка создана автоматически.")
     except ValidationError as exc:
         messages.error(request, "; ".join(exc.messages))

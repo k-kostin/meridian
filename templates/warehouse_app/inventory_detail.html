@@ -29,6 +29,9 @@
             <div><dt>Склад</dt><dd>{{ inventory.warehouse.name }}</dd></div>
             <div><dt>Охват</dt><dd>{{ inventory.get_scope_display }}</dd></div>
             <div><dt>Статус</dt><dd>{{ inventory.get_status_display }}</dd></div>
+            <div><dt>Создал</dt><dd>{{ inventory.created_by|default:"-" }}</dd></div>
+            <div><dt>Обновил</dt><dd>{{ inventory.updated_by|default:"-" }}</dd></div>
+            <div><dt>Провел</dt><dd>{{ inventory.posted_by|default:"-" }}</dd></div>
             <div><dt>Комментарий</dt><dd>{{ inventory.comment|default:"-" }}</dd></div>
             <div><dt>Автокорректировка</dt><dd>{% if adjustment %}<a class="data-link" href="{% url 'document_detail' adjustment.pk %}">{{ adjustment.number }}</a>{% else %}-{% endif %}</dd></div>
         </dl>

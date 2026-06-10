@@ -32,6 +32,9 @@
                 <div><dt>Склад-получатель</dt><dd>{{ document.destination_warehouse.name }}</dd></div>
             {% endif %}
             <div><dt>Статус</dt><dd>{{ document.get_status_display }}</dd></div>
+            <div><dt>Создал</dt><dd>{{ document.created_by|default:"-" }}</dd></div>
+            <div><dt>Обновил</dt><dd>{{ document.updated_by|default:"-" }}</dd></div>
+            <div><dt>Провел</dt><dd>{{ document.posted_by|default:"-" }}</dd></div>
             <div><dt>Комментарий</dt><dd>{{ document.comment|default:"-" }}</dd></div>
             {% if document.source_inventory %}
                 <div><dt>Источник</dt><dd><a class="data-link" href="{% url 'inventory_detail' document.source_inventory.pk %}">{{ document.source_inventory.number }}</a></dd></div>
