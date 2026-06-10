@@ -15,8 +15,8 @@ Meridian is not intended to be a full ERP, accounting system, POS, marketplace c
 
 The intended delivery model is one shared domain core with two deployment profiles:
 
-- local single-user profile: SQLite, one Windows computer, one active operator, local backup/restore;
-- future team profile: the same Django domain logic on a server/PostgreSQL deployment for multiple workstations and users.
+- Local Single User profile: SQLite, one Windows computer, one active operator, local backup/restore;
+- Team / Multi-User profile: the same Django domain logic on a server/PostgreSQL deployment for multiple workstations and users.
 
 The project should not fork into separate accounting kernels for these profiles.
 
