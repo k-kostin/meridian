@@ -46,7 +46,7 @@
                         <td>{{ record.created_at|date:"d.m.Y H:i" }}</td>
                         <td>{{ record.get_kind_display }}</td>
                         <td>{{ record.get_status_display }}</td>
-                        <td>{{ record.size_bytes }} байт</td>
+                        <td>{{ record.size_bytes|filesizeformat }}</td>
                         <td>{{ record.app_version }}</td>
                         <td><a href="{% url 'backup_download' record.pk %}">Скачать</a></td>
                     </tr>

@@ -4,18 +4,19 @@ from io import BytesIO
 from pathlib import Path
 import sqlite3
 import tempfile
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import IntegrityError
+from django.db import DatabaseError, IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
-from .backups import BackupError, create_local_backup, create_pre_migration_backup_if_needed
+from .backups import BackupError, configured_backup_paths, create_local_backup, create_pre_migration_backup_if_needed, restore_local_backup
 from .demo import seed_demo_data
 from .version import APP_VERSION_LABEL
 from .models import (
@@ -126,6 +127,88 @@ class LocalBackupServiceTests(TestCase):
                 record = create_pre_migration_backup_if_needed()
 
         self.assertIsNone(record)
+
+    def test_configured_backup_paths_accepts_string_data_dir(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": temp_path / "db.sqlite3"}},
+                WAREHOUSE_DATA_DIR=str(temp_path),
+            ):
+                paths = configured_backup_paths()
+
+        self.assertEqual(paths.backup_dir, temp_path / "backups")
+
+    def test_pre_migration_backup_survives_missing_metadata_table(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+            backup_dir = temp_path / "backups"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with patch.object(BackupRecord, "save", side_effect=DatabaseError("no such table")):
+                record = create_local_backup(
+                    database_path=db_path,
+                    backup_dir=backup_dir,
+                    kind=BackupKind.PRE_MIGRATION,
+                    app_version="v0.5.0-dev",
+                    allow_unrecorded=True,
+                )
+
+            self.assertIsNone(record.pk)
+            self.assertTrue(Path(record.backup_path).exists())
+            self.assertEqual(record.kind, BackupKind.PRE_MIGRATION)
+
+    def test_manual_backup_fails_when_metadata_cannot_be_saved(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with patch.object(BackupRecord, "save", side_effect=DatabaseError("metadata unavailable")):
+                with self.assertRaises(BackupError):
+                    create_local_backup(
+                        database_path=db_path,
+                        backup_dir=temp_path / "backups",
+                        kind=BackupKind.MANUAL,
+                        app_version="v0.5.0-dev",
+                    )
+
+    def test_restore_removes_target_wal_and_shm_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            backup_path = temp_path / "backup.sqlite3"
+            target_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(backup_path) as connection:
+                connection.execute("CREATE TABLE sample (name TEXT)")
+                connection.execute("INSERT INTO sample (name) VALUES ('restored')")
+                connection.commit()
+
+            with sqlite3.connect(target_path) as connection:
+                connection.execute("CREATE TABLE sample (name TEXT)")
+                connection.execute("INSERT INTO sample (name) VALUES ('old')")
+                connection.commit()
+
+            wal_path = target_path.with_name(target_path.name + "-wal")
+            shm_path = target_path.with_name(target_path.name + "-shm")
+            wal_path.write_bytes(b"old wal")
+            shm_path.write_bytes(b"old shm")
+
+            restore_local_backup(backup_path=backup_path, database_path=target_path)
+
+            self.assertFalse(wal_path.exists())
+            self.assertFalse(shm_path.exists())
+            with sqlite3.connect(target_path) as connection:
+                rows = list(connection.execute("SELECT name FROM sample"))
+
+            self.assertEqual(rows, [("restored",)])
 
 
 class LocalBackupCommandTests(TestCase):
