@@ -1,4 +1,5 @@
 from datetime import date
+import logging
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
 
@@ -100,6 +101,7 @@ PERIOD_MODE_LABELS = {
     "year": "Год",
     "custom": "Период",
 }
+logger = logging.getLogger(__name__)
 PAGE_SIZE_OPTIONS = (10, 25, 50, 100)
 DOCUMENT_PRESETS = {
     "drafts": {"status": DocumentStatus.DRAFT},
@@ -916,10 +918,13 @@ def backup_create(request: HttpRequest) -> HttpResponse:
 
     try:
         record = create_local_backup(message="Manual backup created from web UI.", created_by=request.user)
-        record_manual_backup_created(backup_record=record, actor=authenticated_actor(request))
     except BackupError as exc:
         messages.error(request, str(exc))
     else:
+        try:
+            record_manual_backup_created(backup_record=record, actor=authenticated_actor(request))
+        except Exception:
+            logger.exception("Failed to record manual backup activity event for backup %s.", record.pk)
         messages.success(request, "Резервная копия создана.")
 
     return redirect("backup_list")
