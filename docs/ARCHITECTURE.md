@@ -41,7 +41,7 @@
 - `ActivityEvent`
   - хранит компактную историю складо-влияющих событий;
   - не является security audit log;
-  - пока не содержит полноценный user attribution, но это обязательный commercial pilot readiness gap.
+  - пока не содержит полноценного user attribution, но это обязательный commercial pilot readiness gap.
 - `UserProfile`
   - хранит простую роль пользователя: admin, operator или viewer;
   - не является workspace/account model и не реализует object-level permissions.
