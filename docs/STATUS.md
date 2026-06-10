@@ -34,6 +34,9 @@
 - subtotals и grand total в аналитике периода, разбитые по единицам измерения (смешивание единиц исключено);
 - лист «Итоги» в Excel-выгрузке аналитики с корректными per-unit subtotals и grand total;
 - отдельные листы по каждому складу в Excel-выгрузке аналитики при режиме `По складам`;
+- ручное создание, просмотр и скачивание локальных SQLite backup для `Local Single User` профиля;
+- restore procedure через management command с обязательным `--confirm`;
+- automatic `pre_migration` backup в desktop sidecar для существующей SQLite-базы;
 - поиск, пагинация и выбор размера страницы в списочных разделах и на экране текущих остатков;
 - асинхронный live-search на экране текущих остатков без потери фокуса поля ввода;
 - автоматический возврат к полному списку при очистке поисковой строки в списочных разделах;
@@ -202,7 +205,7 @@ python manage.py test
 
 - нет расширенного импорта стартовых остатков для нескольких складов в одном файле;
 - нет user attribution в операционной истории: видно событие, но не полноценное "кто сделал";
-- нет встроенного backup/restore UI и автоматического backup перед миграциями/обновлениями;
+- нет web restore UI, scheduled backups, encryption и cloud backup;
 - SQLite остается local/demo/pilot backend для `Local Single User` профиля; production-grade многопользовательская работа не заявлена;
 - `Team / Multi-User` профиль пока не реализован: для него нужен отдельный server/PostgreSQL deployment path, но не отдельное доменное ядро;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
@@ -213,7 +216,7 @@ python manage.py test
 
 ## Рекомендуемые следующие шаги
 
-1. Начать Stage C commercial pilot readiness для `Local Single User` профиля: backup/restore, user attribution, audit hardening, deployment limits.
+1. Продолжить Stage C commercial pilot readiness для `Local Single User` профиля: user attribution, audit hardening, deployment limits.
 2. Проверить реальные или приближенные к реальным Excel-файлы для onboarding/import flow.
 3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.

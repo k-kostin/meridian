@@ -124,6 +124,9 @@ Stage A audit gate passed on 2026-06-04; new product work should continue from S
    - restore procedure;
    - автоматический backup перед миграцией/обновлением;
    - понятное расположение пользовательской SQLite-базы.
+
+First slice implemented: local manual backup, restore command, and pre-migration backup for SQLite. Scheduled/cloud/encrypted backups remain outside this slice.
+
 2. User attribution:
    - кто создал документ;
    - кто изменил черновик;

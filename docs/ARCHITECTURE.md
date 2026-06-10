@@ -108,6 +108,9 @@
 - До реального коммерческого пилота нужны backup/restore и automatic pre-migration backup.
 - Desktop packaging должен хранить пользовательскую базу в явном user data directory, а не рядом с bundled app.
 - Desktop-shell выбирает профиль запуска и передает конфигурацию sidecar, но не переносит в себя доменные правила, отчеты, import/export или логику остатков.
+- Backup/restore layer относится к deployment safety, а не к доменной складской логике.
+- Web UI может создавать и скачивать backup, но restore выполняется вне активного web request через management command.
+- Desktop sidecar обязан создавать pre-migration backup перед автоматическим `migrate` для существующей SQLite-базы.
 
 ## Когда нужно рефакторить дальше
 
