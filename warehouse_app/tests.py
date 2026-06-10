@@ -294,6 +294,32 @@ class BackupViewTests(TestCase):
         self.assertEqual(event.metadata["backup_kind"], BackupKind.MANUAL)
         self.assertIn("backup_id", event.metadata)
 
+    def test_admin_backup_create_succeeds_if_operational_activity_logging_fails(self):
+        user = User.objects.create_user(username="admin-backup-resilient", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.ADMIN)
+        self.client.force_login(user)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                with patch("warehouse_app.views.record_manual_backup_created", side_effect=RuntimeError("audit down")):
+                    with self.assertLogs("warehouse_app.views", level="ERROR") as logs:
+                        response = self.client.post(reverse("backup_create"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(BackupRecord.objects.count(), 1)
+        self.assertContains(response, "Резервная копия создана")
+        self.assertIn("Failed to record manual backup activity event", logs.output[0])
+
 
 @override_settings(DEMO_MODE=True)
 class WarehouseFlowTests(TestCase):
