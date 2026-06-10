@@ -26,7 +26,7 @@ This repository starts from the `v0.1 MVP Baseline` and is now evolving through 
 
 The project has closed `v0.4.0` Stage B operational contour work: activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, Excel nomenclature import with preview/validation, opening stock import through draft full inventory documents, item categories, category-aware filters, and saved views for key lists.
 
-The project is useful for local demo and pilot-style evaluation, but it is not production-complete. Remaining commercial-readiness gaps include audit hardening beyond core operation attribution, Windows installer validation, explicit SQLite deployment limits, and broader desktop update/migration safety.
+The project is useful for local demo and pilot-style evaluation, but it is not production-complete. The current local profile now has backup/restore, user attribution, pilot-grade operational audit events, and explicit SQLite deployment limits. Remaining commercial-readiness gaps include real Excel onboarding validation, Windows installer validation, and broader desktop update/migration safety.
 
 ## Local Development
 

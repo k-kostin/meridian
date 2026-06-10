@@ -66,6 +66,89 @@ def record_inventory_adjustment_created(inventory: InventoryDocument, adjustment
     )
 
 
+def record_item_import_committed(
+    *,
+    created_count: int,
+    updated_count: int,
+    import_mode: str,
+    auto_create_units: bool,
+    actor=None,
+) -> None:
+    ActivityEvent.objects.create(
+        event_type=ActivityEventType.ITEM_IMPORT_COMMITTED,
+        message=f"Импорт номенклатуры выполнен: создано {created_count}, обновлено {updated_count}",
+        **actor_defaults(actor),
+        metadata={
+            "created_count": created_count,
+            "updated_count": updated_count,
+            "import_mode": import_mode,
+            "auto_create_units": auto_create_units,
+        },
+    )
+
+
+def record_opening_inventory_import_committed(
+    *,
+    inventory: InventoryDocument,
+    created_lines_count: int,
+    actor=None,
+) -> None:
+    ActivityEvent.objects.create(
+        event_type=ActivityEventType.OPENING_INVENTORY_IMPORT_COMMITTED,
+        warehouse=inventory.warehouse,
+        inventory_document=inventory,
+        message=f"Импорт стартовых остатков создал инвентаризацию {inventory.number}",
+        **actor_defaults(actor),
+        metadata={
+            "inventory_number": inventory.number,
+            "created_lines_count": created_lines_count,
+        },
+    )
+
+
+def record_manual_backup_created(*, backup_record, actor=None) -> None:
+    ActivityEvent.objects.create(
+        event_type=ActivityEventType.MANUAL_BACKUP_CREATED,
+        message=f"Создана резервная копия #{backup_record.pk}",
+        **actor_defaults(actor),
+        metadata={
+            "backup_id": backup_record.pk,
+            "backup_kind": backup_record.kind,
+            "backup_status": backup_record.status,
+            "size_bytes": backup_record.size_bytes,
+        },
+    )
+
+
+def record_demo_data_reset(*, summary: dict, reset_performed: bool, actor=None) -> None:
+    ActivityEvent.objects.create(
+        event_type=ActivityEventType.DEMO_DATA_RESET,
+        message="Демо-данные перезагружены" if reset_performed else "Демо-данные загружены",
+        **actor_defaults(actor),
+        metadata={
+            "reset_performed": reset_performed,
+            "warehouses": summary.get("warehouses", 0),
+            "items": summary.get("items", 0),
+            "documents": summary.get("documents", 0),
+            "inventories": summary.get("inventories", 0),
+        },
+    )
+
+
+def record_reference_record_changed(*, instance, action: str, actor=None) -> None:
+    ActivityEvent.objects.create(
+        event_type=ActivityEventType.REFERENCE_RECORD_CHANGED,
+        message=f"Справочник изменен: {instance._meta.verbose_name} #{instance.pk}",
+        **actor_defaults(actor),
+        metadata={
+            "action": action,
+            "model": instance.__class__.__name__,
+            "object_id": instance.pk,
+            "label": str(instance),
+        },
+    )
+
+
 def get_document_timeline(document: StockDocument):
     return ActivityEvent.objects.select_related(
         "warehouse",

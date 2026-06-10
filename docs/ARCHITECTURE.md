@@ -41,8 +41,9 @@
 - `ActivityEvent`
   - хранит компактную историю складо-влияющих событий;
   - не является security audit log;
-  - содержит pilot-grade actor attribution для событий проведения, если действие выполнено авторизованным пользователем;
-  - не закрывает import/demo/reference-edit attribution и не заменяет immutable audit log.
+  - содержит pilot-grade actor attribution для событий проведения, import commit, demo reset, manual backup и reference edits, если действие выполнено авторизованным пользователем;
+  - допускает события без конкретного склада для глобальных operational actions;
+  - не является immutable audit log и не должен использоваться как forensic/security-grade журнал.
 - `UserProfile`
   - хранит простую роль пользователя: admin, operator или viewer;
   - не является workspace/account model и не реализует object-level permissions.
@@ -108,6 +109,7 @@
 - `team_multi_user` profile: будущий server/PostgreSQL deployment path для нескольких пользователей и рабочих мест.
 - `select_for_update()` нельзя считать полноценной гарантией row-level locking на SQLite.
 - Полноценная конкурентная многопользовательская эксплуатация требует `team_multi_user` profile или явного app-level locking design; ее нельзя заявлять на текущем SQLite-профиле.
+- Dashboard явно показывает границу `Local Single User`: SQLite, один локальный компьютер, один активный оператор, без обещания одновременной multi-user эксплуатации.
 - До реального коммерческого пилота нужны backup/restore и automatic pre-migration backup.
 - Desktop packaging должен хранить пользовательскую базу в явном user data directory, а не рядом с bundled app.
 - Desktop-shell выбирает профиль запуска и передает конфигурацию sidecar, но не переносит в себя доменные правила, отчеты, import/export или логику остатков.
