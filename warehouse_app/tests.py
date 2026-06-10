@@ -1,6 +1,9 @@
-from io import BytesIO
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+import sqlite3
+import tempfile
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
@@ -9,6 +12,7 @@ from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
 from .demo import seed_demo_data
+from .backups import BackupError, create_local_backup
 from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
@@ -63,6 +67,50 @@ class BackupRecordModelTests(TestCase):
 
         self.assertIn("manual", str(record))
         self.assertIn("created", str(record))
+
+
+class LocalBackupServiceTests(TestCase):
+    def test_create_local_backup_copies_sqlite_database_and_records_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+            backup_dir = temp_path / "backups"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
+                connection.execute("INSERT INTO sample (name) VALUES ('alpha')")
+                connection.commit()
+
+            record = create_local_backup(
+                database_path=db_path,
+                backup_dir=backup_dir,
+                kind=BackupKind.MANUAL,
+                app_version="v0.5.0-dev",
+                message="Manual backup created.",
+            )
+
+            self.assertEqual(record.status, BackupStatus.CREATED)
+            self.assertEqual(record.kind, BackupKind.MANUAL)
+            self.assertTrue(Path(record.backup_path).exists())
+            self.assertGreater(record.size_bytes, 0)
+            self.assertEqual(len(record.sha256), 64)
+
+            with sqlite3.connect(record.backup_path) as backup_connection:
+                rows = list(backup_connection.execute("SELECT name FROM sample"))
+
+            self.assertEqual(rows, [("alpha",)])
+
+    def test_create_local_backup_fails_for_missing_database(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            with self.assertRaises(BackupError):
+                create_local_backup(
+                    database_path=temp_path / "missing.sqlite3",
+                    backup_dir=temp_path / "backups",
+                    kind=BackupKind.MANUAL,
+                    app_version="v0.5.0-dev",
+                )
 
 
 @override_settings(DEMO_MODE=True)
