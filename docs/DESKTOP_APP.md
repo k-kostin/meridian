@@ -141,6 +141,8 @@ Shell делает только orchestration:
 - создан sidecar launcher на `waitress`;
 - создан быстрый `pywebview` shell launcher;
 - вынесен путь к рабочей SQLite-базе в desktop-friendly env-конфигурацию (`WAREHOUSE_DATA_DIR` / `DJANGO_DB_PATH`);
+- для Local Single User deployments user data directory содержит SQLite-базу и `backups/`;
+- перед автоматической миграцией sidecar создает `pre_migration` backup, если база уже существует;
 - добавлены стартовые `PyInstaller` spec-файлы и Windows build-скрипты для prototype-path;
 - добавлен primary path (`Electron`) и отделен от экспериментального path (`Tauri`) и fallback-path (`pywebview`).
 - на macOS уже проверен sidecar-path:

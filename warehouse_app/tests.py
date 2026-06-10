@@ -1,18 +1,29 @@
-from io import BytesIO
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
+from pathlib import Path
+import sqlite3
+import tempfile
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
+from .backups import BackupError, create_local_backup, create_pre_migration_backup_if_needed
 from .demo import seed_demo_data
 from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
     ActivityEventType,
+    BackupKind,
+    BackupRecord,
+    BackupStatus,
     DocumentStatus,
     InventoryDocument,
     InventoryLine,
@@ -44,6 +55,135 @@ from .services import (
     get_balance_rows,
     resolve_period,
 )
+
+
+class BackupRecordModelTests(TestCase):
+    def test_backup_record_string_contains_kind_and_status(self):
+        record = BackupRecord.objects.create(
+            kind=BackupKind.MANUAL,
+            status=BackupStatus.CREATED,
+            backup_path="/tmp/meridian-20260610-120000-manual.sqlite3",
+            source_database_path="/tmp/db.sqlite3",
+            size_bytes=128,
+            sha256="a" * 64,
+            app_version="v0.5.0-dev",
+        )
+
+        self.assertIn("manual", str(record))
+        self.assertIn("created", str(record))
+
+
+class LocalBackupServiceTests(TestCase):
+    def test_create_local_backup_copies_sqlite_database_and_records_metadata(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+            backup_dir = temp_path / "backups"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
+                connection.execute("INSERT INTO sample (name) VALUES ('alpha')")
+                connection.commit()
+
+            record = create_local_backup(
+                database_path=db_path,
+                backup_dir=backup_dir,
+                kind=BackupKind.MANUAL,
+                app_version="v0.5.0-dev",
+                message="Manual backup created.",
+            )
+
+            self.assertEqual(record.status, BackupStatus.CREATED)
+            self.assertEqual(record.kind, BackupKind.MANUAL)
+            self.assertTrue(Path(record.backup_path).exists())
+            self.assertGreater(record.size_bytes, 0)
+            self.assertEqual(len(record.sha256), 64)
+
+            with sqlite3.connect(record.backup_path) as backup_connection:
+                rows = list(backup_connection.execute("SELECT name FROM sample"))
+
+            self.assertEqual(rows, [("alpha",)])
+
+    def test_create_local_backup_fails_for_missing_database(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+
+            with self.assertRaises(BackupError):
+                create_local_backup(
+                    database_path=temp_path / "missing.sqlite3",
+                    backup_dir=temp_path / "backups",
+                    kind=BackupKind.MANUAL,
+                    app_version="v0.5.0-dev",
+                )
+
+    def test_create_pre_migration_backup_skips_missing_database(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": temp_path / "db.sqlite3"}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                record = create_pre_migration_backup_if_needed()
+
+        self.assertIsNone(record)
+
+
+class LocalBackupCommandTests(TestCase):
+    def test_create_local_backup_command_creates_record(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                call_command("create_local_backup", verbosity=0)
+
+            self.assertEqual(BackupRecord.objects.count(), 1)
+            self.assertEqual(BackupRecord.objects.get().kind, BackupKind.MANUAL)
+
+    def test_restore_local_backup_requires_confirm(self):
+        with self.assertRaises(CommandError):
+            call_command("restore_local_backup", "/tmp/example.sqlite3", verbosity=0)
+
+
+class BackupViewTests(TestCase):
+    def test_viewer_cannot_open_backup_list(self):
+        user = User.objects.create_user(username="viewer", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.VIEWER)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("backup_list"))
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_create_backup_from_ui(self):
+        user = User.objects.create_user(username="admin", password="pass")
+        UserProfile.objects.create(user=user, role=UserRole.ADMIN)
+        self.client.force_login(user)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                response = self.client.post(reverse("backup_create"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(BackupRecord.objects.count(), 1)
+        self.assertContains(response, "Резервная копия создана")
 
 
 @override_settings(DEMO_MODE=True)

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Резервные копии{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <div>
+        <p class="eyebrow">Local Single User</p>
+        <h2>Резервные копии</h2>
+        <p>Создание локальных копий SQLite-базы для восстановления после ошибки, обновления или миграции.</p>
+    </div>
+    <form method="post" action="{% url 'backup_create' %}">
+        {% csrf_token %}
+        <button type="submit" class="button primary" onclick="return confirm('Создать резервную копию текущей базы?');">Создать копию</button>
+    </form>
+</section>
+
+<section class="card">
+    <h3>Расположение данных</h3>
+    <dl class="definition-list">
+        <dt>База данных</dt>
+        <dd><code>{{ database_path }}</code></dd>
+        <dt>Папка копий</dt>
+        <dd><code>{{ backup_dir }}</code></dd>
+    </dl>
+    <p class="muted">Восстановление выполняется через management command, а не из работающего web-интерфейса.</p>
+</section>
+
+<section class="card">
+    <h3>Последние копии</h3>
+    {% if records %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Создана</th>
+                    <th>Тип</th>
+                    <th>Статус</th>
+                    <th>Размер</th>
+                    <th>Версия</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for record in records %}
+                    <tr>
+                        <td>{{ record.created_at|date:"d.m.Y H:i" }}</td>
+                        <td>{{ record.get_kind_display }}</td>
+                        <td>{{ record.get_status_display }}</td>
+                        <td>{{ record.size_bytes }} байт</td>
+                        <td>{{ record.app_version }}</td>
+                        <td><a href="{% url 'backup_download' record.pk %}">Скачать</a></td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="empty-state">Резервные копии еще не созданы. Создайте первую копию перед реальным вводом данных.</p>
+    {% endif %}
+</section>
+{% endblock %}

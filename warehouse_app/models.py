@@ -160,6 +160,46 @@ class UserProfile(TimeStampedModel):
         return f"{self.user} / {self.get_role_display()}"
 
 
+class BackupKind(models.TextChoices):
+    MANUAL = "manual", "Ручная"
+    PRE_MIGRATION = "pre_migration", "Перед миграцией"
+    PRE_RESTORE = "pre_restore", "Перед восстановлением"
+
+
+class BackupStatus(models.TextChoices):
+    CREATED = "created", "Создана"
+    FAILED = "failed", "Ошибка"
+    RESTORED = "restored", "Восстановлена"
+
+
+class BackupRecord(TimeStampedModel):
+    kind = models.CharField("Тип", max_length=32, choices=BackupKind.choices)
+    status = models.CharField("Статус", max_length=32, choices=BackupStatus.choices)
+    backup_path = models.CharField("Путь к копии", max_length=500)
+    source_database_path = models.CharField("Путь к базе", max_length=500)
+    size_bytes = models.PositiveBigIntegerField("Размер, байт", default=0)
+    sha256 = models.CharField("SHA-256", max_length=64, blank=True)
+    app_version = models.CharField("Версия приложения", max_length=32, blank=True)
+    message = models.CharField("Сообщение", max_length=255, blank=True)
+    metadata = models.JSONField("Метаданные", default=dict, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="backup_records",
+        verbose_name="Пользователь",
+        null=True,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        verbose_name = "Резервная копия"
+        verbose_name_plural = "Резервные копии"
+
+    def __str__(self) -> str:
+        return f"{self.kind} / {self.status} / {self.created_at:%Y-%m-%d %H:%M:%S}"
+
+
 def _generate_number(prefix: str, model_cls: type[models.Model], date_value):
     date_part = date_value.strftime("%Y%m%d")
     prefix_stub = f"{prefix}-{date_part}-"
