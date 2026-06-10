@@ -200,6 +200,17 @@ class BackupRecord(TimeStampedModel):
         return f"{self.kind} / {self.status} / {self.created_at:%Y-%m-%d %H:%M:%S}"
 
 
+def attribution_user_field(related_name: str):
+    return models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name=related_name,
+        verbose_name="Пользователь",
+        null=True,
+        blank=True,
+    )
+
+
 def _generate_number(prefix: str, model_cls: type[models.Model], date_value):
     date_part = date_value.strftime("%Y%m%d")
     prefix_stub = f"{prefix}-{date_part}-"
@@ -242,6 +253,9 @@ class StockDocument(TimeStampedModel):
     )
     comment = models.TextField("Комментарий", blank=True)
     posted_at = models.DateTimeField("Дата проведения", null=True, blank=True)
+    created_by = attribution_user_field("created_stock_documents")
+    updated_by = attribution_user_field("updated_stock_documents")
+    posted_by = attribution_user_field("posted_stock_documents")
     source_inventory = models.ForeignKey(
         "InventoryDocument",
         on_delete=models.SET_NULL,
@@ -301,11 +315,12 @@ class StockDocument(TimeStampedModel):
         return total or Decimal("0")
 
     @transaction.atomic
-    def post(self):
+    def post(self, *, posted_by=None):
         locked_document = StockDocument.objects.select_for_update().get(pk=self.pk)
         if locked_document.status == DocumentStatus.POSTED:
             self.status = locked_document.status
             self.posted_at = locked_document.posted_at
+            self.posted_by = locked_document.posted_by
             return
 
         Warehouse.objects.select_for_update().get(pk=locked_document.warehouse_id)
@@ -327,13 +342,17 @@ class StockDocument(TimeStampedModel):
 
         locked_document.status = DocumentStatus.POSTED
         locked_document.posted_at = timezone.now()
-        locked_document.save(update_fields=["status", "posted_at", "updated_at"])
+        if getattr(posted_by, "is_authenticated", False):
+            locked_document.posted_by = posted_by
+            locked_document.updated_by = posted_by
+        locked_document.save(update_fields=["status", "posted_at", "posted_by", "updated_by", "updated_at"])
         self.status = locked_document.status
         self.posted_at = locked_document.posted_at
+        self.posted_by = locked_document.posted_by
 
         from .activity import record_stock_document_posted
 
-        record_stock_document_posted(locked_document)
+        record_stock_document_posted(locked_document, actor=posted_by)
 
 
 class StockDocumentLine(models.Model):
@@ -390,6 +409,9 @@ class InventoryDocument(TimeStampedModel):
     )
     comment = models.TextField("Комментарий", blank=True)
     posted_at = models.DateTimeField("Дата проведения", null=True, blank=True)
+    created_by = attribution_user_field("created_inventory_documents")
+    updated_by = attribution_user_field("updated_inventory_documents")
+    posted_by = attribution_user_field("posted_inventory_documents")
 
     class Meta:
         ordering = ["-inventory_date", "-created_at"]
@@ -414,11 +436,12 @@ class InventoryDocument(TimeStampedModel):
         super().save(*args, **kwargs)
 
     @transaction.atomic
-    def post(self):
+    def post(self, *, posted_by=None):
         locked_inventory = InventoryDocument.objects.select_for_update().get(pk=self.pk)
         if locked_inventory.status == DocumentStatus.POSTED:
             self.status = locked_inventory.status
             self.posted_at = locked_inventory.posted_at
+            self.posted_by = locked_inventory.posted_by
             return
 
         from .services import get_balance_map
@@ -477,19 +500,23 @@ class InventoryDocument(TimeStampedModel):
                 line.document = adjustment
                 line.full_clean()
             StockDocumentLine.objects.bulk_create(adjustment_lines)
-            adjustment.post()
+            adjustment.post(posted_by=posted_by)
 
         locked_inventory.status = DocumentStatus.POSTED
         locked_inventory.posted_at = timezone.now()
-        locked_inventory.save(update_fields=["status", "posted_at", "updated_at"])
+        if getattr(posted_by, "is_authenticated", False):
+            locked_inventory.posted_by = posted_by
+            locked_inventory.updated_by = posted_by
+        locked_inventory.save(update_fields=["status", "posted_at", "posted_by", "updated_by", "updated_at"])
         self.status = locked_inventory.status
         self.posted_at = locked_inventory.posted_at
+        self.posted_by = locked_inventory.posted_by
 
         from .activity import record_inventory_adjustment_created, record_inventory_posted
 
-        record_inventory_posted(locked_inventory)
+        record_inventory_posted(locked_inventory, actor=posted_by)
         if adjustment:
-            record_inventory_adjustment_created(locked_inventory, adjustment)
+            record_inventory_adjustment_created(locked_inventory, adjustment, actor=posted_by)
 
 
 class InventoryLine(models.Model):
@@ -555,6 +582,8 @@ class ActivityEvent(TimeStampedModel):
     )
     message = models.CharField("Событие", max_length=255)
     metadata = models.JSONField("Метаданные", default=dict, blank=True)
+    actor = attribution_user_field("warehouse_activity_events")
+    actor_label = models.CharField("Пользователь", max_length=150, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]

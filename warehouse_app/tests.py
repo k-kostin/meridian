@@ -2710,6 +2710,88 @@ class WarehouseFlowTests(TestCase):
 
 
 @override_settings(DEMO_MODE=True)
+class UserAttributionModelTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="operator", password="pass")
+        self.unit = Unit.objects.create(code="pcs", name="Штука")
+        self.warehouse = Warehouse.objects.create(code="main", name="Основной склад")
+        self.item = Item.objects.create(sku="SKU-1", name="Позиция", unit=self.unit)
+
+    def test_stock_document_stores_created_updated_and_posted_users(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 6, 10),
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("2"))
+
+        document.post(posted_by=self.user)
+        document.refresh_from_db()
+
+        self.assertEqual(document.created_by, self.user)
+        self.assertEqual(document.updated_by, self.user)
+        self.assertEqual(document.posted_by, self.user)
+
+    def test_inventory_document_stores_created_updated_and_posted_users(self):
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 6, 10),
+            scope=InventoryScope.FULL,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        InventoryLine.objects.create(
+            inventory=inventory,
+            item=self.item,
+            expected_quantity=Decimal("0"),
+            actual_quantity=Decimal("1"),
+        )
+
+        inventory.post(posted_by=self.user)
+        inventory.refresh_from_db()
+
+        self.assertEqual(inventory.created_by, self.user)
+        self.assertEqual(inventory.updated_by, self.user)
+        self.assertEqual(inventory.posted_by, self.user)
+
+    def test_stock_document_posted_event_stores_actor(self):
+        document = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 6, 10),
+        )
+        StockDocumentLine.objects.create(document=document, item=self.item, quantity=Decimal("2"))
+
+        document.post(posted_by=self.user)
+
+        event = ActivityEvent.objects.get(
+            stock_document=document,
+            event_type=ActivityEventType.STOCK_DOCUMENT_POSTED,
+        )
+        self.assertEqual(event.actor, self.user)
+        self.assertEqual(event.actor_label, "operator")
+
+    def test_inventory_posted_events_store_actor(self):
+        inventory = InventoryDocument.objects.create(
+            warehouse=self.warehouse,
+            inventory_date=date(2026, 6, 10),
+            scope=InventoryScope.FULL,
+        )
+        InventoryLine.objects.create(
+            inventory=inventory,
+            item=self.item,
+            expected_quantity=Decimal("0"),
+            actual_quantity=Decimal("1"),
+        )
+
+        inventory.post(posted_by=self.user)
+
+        events = ActivityEvent.objects.filter(inventory_document=inventory)
+        self.assertTrue(events.filter(actor=self.user, actor_label="operator").exists())
+
+
 class DemoModeTests(TestCase):
     def test_seed_demo_data_creates_sample_records(self):
         summary = seed_demo_data()
