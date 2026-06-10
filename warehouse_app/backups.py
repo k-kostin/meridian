@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
-from django.db import connections
+from django.db import DatabaseError, connections
 from django.utils import timezone
 
 from .models import BackupKind, BackupRecord, BackupStatus
@@ -28,7 +28,7 @@ class BackupPaths:
 def configured_backup_paths() -> BackupPaths:
     database_name = settings.DATABASES["default"]["NAME"]
     database_path = Path(database_name).expanduser()
-    backup_dir = Path(getattr(settings, "WAREHOUSE_BACKUP_DIR", settings.WAREHOUSE_DATA_DIR / "backups")).expanduser()
+    backup_dir = Path(getattr(settings, "WAREHOUSE_BACKUP_DIR", Path(settings.WAREHOUSE_DATA_DIR) / "backups")).expanduser()
     return BackupPaths(database_path=database_path, backup_dir=backup_dir)
 
 
@@ -70,23 +70,23 @@ def create_local_backup(
     message: str = "",
     metadata: dict[str, Any] | None = None,
     created_by=None,
+    allow_unrecorded: bool = False,
 ) -> BackupRecord:
     paths = configured_backup_paths()
     source_path = Path(database_path or paths.database_path).expanduser()
     target_dir = Path(backup_dir or paths.backup_dir).expanduser()
 
-    ensure_sqlite_database(source_path)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = _next_backup_path(target_dir, kind)
-
     try:
+        ensure_sqlite_database(source_path)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target_path = _next_backup_path(target_dir, kind)
         with sqlite3.connect(source_path) as source_connection:
             with sqlite3.connect(target_path) as backup_connection:
                 source_connection.backup(backup_connection)
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:
         raise BackupError(f"SQLite backup failed: {exc}") from exc
 
-    return BackupRecord.objects.create(
+    record = BackupRecord(
         kind=kind,
         status=BackupStatus.CREATED,
         backup_path=str(target_path),
@@ -99,6 +99,14 @@ def create_local_backup(
         created_by=created_by if getattr(created_by, "is_authenticated", False) else None,
     )
 
+    try:
+        record.save()
+    except DatabaseError as exc:
+        if not allow_unrecorded:
+            raise BackupError(f"Backup file created but metadata could not be saved: {exc}") from exc
+
+    return record
+
 
 def create_pre_migration_backup_if_needed() -> BackupRecord | None:
     paths = configured_backup_paths()
@@ -110,7 +118,18 @@ def create_pre_migration_backup_if_needed() -> BackupRecord | None:
         kind=BackupKind.PRE_MIGRATION,
         message="Automatic backup before migrations.",
         metadata={"reason": "pre_migration"},
+        allow_unrecorded=True,
     )
+
+
+def remove_sqlite_sidecar_files(database_path: Path) -> None:
+    for suffix in ("-wal", "-shm"):
+        side_file = database_path.with_name(database_path.name + suffix)
+        if side_file.exists():
+            try:
+                side_file.unlink()
+            except OSError as exc:
+                raise BackupError(f"Cannot remove SQLite sidecar file {side_file}: {exc}") from exc
 
 
 def restore_local_backup(*, backup_path: Path, database_path: Path | None = None) -> None:
@@ -122,6 +141,7 @@ def restore_local_backup(*, backup_path: Path, database_path: Path | None = None
     target_path.parent.mkdir(parents=True, exist_ok=True)
 
     connections.close_all()
+    remove_sqlite_sidecar_files(target_path)
     with sqlite3.connect(source_path) as source_connection:
         with sqlite3.connect(target_path) as target_connection:
             source_connection.backup(target_connection)
