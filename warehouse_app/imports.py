@@ -102,8 +102,8 @@ def _as_text(value) -> str:
 
 
 def _normalized_lookup_key(value) -> str:
-    text = _as_text(value).replace("\xa0", " ").casefold()
-    return re.sub(r"[^0-9a-zа-яё]+", "", text)
+    text = _as_text(value).casefold()
+    return re.sub(r"[^\w]+", "", text).replace("_", "")
 
 
 def _as_bool(value) -> bool:
