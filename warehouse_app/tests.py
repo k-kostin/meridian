@@ -4,15 +4,18 @@ from io import BytesIO
 from pathlib import Path
 import sqlite3
 import tempfile
+
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
-from .demo import seed_demo_data
 from .backups import BackupError, create_local_backup
+from .demo import seed_demo_data
 from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
@@ -111,6 +114,30 @@ class LocalBackupServiceTests(TestCase):
                     kind=BackupKind.MANUAL,
                     app_version="v0.5.0-dev",
                 )
+
+
+class LocalBackupCommandTests(TestCase):
+    def test_create_local_backup_command_creates_record(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            db_path = temp_path / "db.sqlite3"
+
+            with sqlite3.connect(db_path) as connection:
+                connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY)")
+                connection.commit()
+
+            with override_settings(
+                DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": db_path}},
+                WAREHOUSE_DATA_DIR=temp_path,
+            ):
+                call_command("create_local_backup", verbosity=0)
+
+            self.assertEqual(BackupRecord.objects.count(), 1)
+            self.assertEqual(BackupRecord.objects.get().kind, BackupKind.MANUAL)
+
+    def test_restore_local_backup_requires_confirm(self):
+        with self.assertRaises(CommandError):
+            call_command("restore_local_backup", "/tmp/example.sqlite3", verbosity=0)
 
 
 @override_settings(DEMO_MODE=True)
