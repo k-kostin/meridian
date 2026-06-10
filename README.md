@@ -13,6 +13,13 @@ The project is intentionally compact:
 
 Meridian is not intended to be a full ERP, accounting system, POS, marketplace connector, or enterprise WMS. The near-term target is a small local warehouse desk for spreadsheet-first operations that need document-based stock accounting without adopting a large system.
 
+The intended delivery model is one shared domain core with two deployment profiles:
+
+- local single-user profile: SQLite, one Windows computer, one active operator, local backup/restore;
+- future team profile: the same Django domain logic on a server/PostgreSQL deployment for multiple workstations and users.
+
+The project should not fork into separate accounting kernels for these profiles.
+
 ## Status
 
 This repository starts from the `v0.1 MVP Baseline` and is now evolving through controlled hardening slices.

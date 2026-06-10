@@ -203,7 +203,8 @@ python manage.py test
 - нет расширенного импорта стартовых остатков для нескольких складов в одном файле;
 - нет user attribution в операционной истории: видно событие, но не полноценное "кто сделал";
 - нет встроенного backup/restore UI и автоматического backup перед миграциями/обновлениями;
-- SQLite остается local/demo/pilot backend; production-grade многопользовательская работа не заявлена;
+- SQLite остается local/demo/pilot backend для `Local Single User` профиля; production-grade многопользовательская работа не заявлена;
+- `Team / Multi-User` профиль пока не реализован: для него нужен отдельный server/PostgreSQL deployment path, но не отдельное доменное ядро;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
@@ -212,10 +213,11 @@ python manage.py test
 
 ## Рекомендуемые следующие шаги
 
-1. Начать Stage C commercial pilot readiness: backup/restore, user attribution, audit hardening, deployment limits.
+1. Начать Stage C commercial pilot readiness для `Local Single User` профиля: backup/restore, user attribution, audit hardening, deployment limits.
 2. Проверить реальные или приближенные к реальным Excel-файлы для onboarding/import flow.
 3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
-5. После этого вернуться к focused operational analytics.
-6. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
-7. Решить, нужны ли контрагенты, цены, barcode/labels и связь со сбытом, но только после реального клиентского сигнала.
+5. После закрытия local pilot readiness отдельно спланировать `Team / Multi-User` профиль как server/PostgreSQL path без развилки бизнес-логики.
+6. После этого вернуться к focused operational analytics.
+7. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
+8. Решить, нужны ли контрагенты, цены, barcode/labels и связь со сбытом, но только после реального клиентского сигнала.

@@ -99,12 +99,15 @@
 
 ## Deployment Boundaries
 
-- Текущий SQLite path является local/demo/pilot backend.
-- Ранний коммерческий supported mode: один локальный компьютер и один активный оператор.
+- Проект должен сохранять одно доменное ядро и одну реализацию правил складского учета для всех коммерческих вариантов поставки.
+- Коммерческие профили отличаются инфраструктурой, конфигурацией, упаковкой и операционными гарантиями, а не отдельными accounting kernels.
+- `local_single_user` profile: SQLite, local/demo/pilot backend, один локальный компьютер, один активный оператор, desktop data-dir и backup/restore.
+- `team_multi_user` profile: будущий server/PostgreSQL deployment path для нескольких пользователей и рабочих мест.
 - `select_for_update()` нельзя считать полноценной гарантией row-level locking на SQLite.
-- Полноценная конкурентная многопользовательская эксплуатация требует отдельного PostgreSQL/server deployment path или явного app-level locking design.
+- Полноценная конкурентная многопользовательская эксплуатация требует `team_multi_user` profile или явного app-level locking design; ее нельзя заявлять на текущем SQLite-профиле.
 - До реального коммерческого пилота нужны backup/restore и automatic pre-migration backup.
 - Desktop packaging должен хранить пользовательскую базу в явном user data directory, а не рядом с bundled app.
+- Desktop-shell выбирает профиль запуска и передает конфигурацию sidecar, но не переносит в себя доменные правила, отчеты, import/export или логику остатков.
 
 ## Когда нужно рефакторить дальше
 
