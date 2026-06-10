@@ -13,6 +13,9 @@ from .version import APP_VERSION_LABEL
 from .models import (
     ActivityEvent,
     ActivityEventType,
+    BackupKind,
+    BackupRecord,
+    BackupStatus,
     DocumentStatus,
     InventoryDocument,
     InventoryLine,
@@ -44,6 +47,22 @@ from .services import (
     get_balance_rows,
     resolve_period,
 )
+
+
+class BackupRecordModelTests(TestCase):
+    def test_backup_record_string_contains_kind_and_status(self):
+        record = BackupRecord.objects.create(
+            kind=BackupKind.MANUAL,
+            status=BackupStatus.CREATED,
+            backup_path="/tmp/meridian-20260610-120000-manual.sqlite3",
+            source_database_path="/tmp/db.sqlite3",
+            size_bytes=128,
+            sha256="a" * 64,
+            app_version="v0.5.0-dev",
+        )
+
+        self.assertIn("manual", str(record))
+        self.assertIn("created", str(record))
 
 
 @override_settings(DEMO_MODE=True)
