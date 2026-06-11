@@ -241,7 +241,7 @@ Synthetic Excel import smoke implemented: generated realistic `.xlsx` files were
 
 Почему это отдельный stage:
 
-- прожарка показала, что SQLite подходит для `Local Single User`, но не должен незаметно продаваться как production-grade multi-user;
+- анализ показал, что SQLite подходит для `Local Single User`, но не должен незаметно продаваться как production-grade multi-user;
 - несколько операторов одновременно - это уже другой deployment profile, а не "чуть более смелый desktop mode";
 - user attribution и pilot audit trail уже создают foundation, но не заменяют server/PostgreSQL эксплуатацию;
 - разделение профилей должно быть коммерческим и операционным, а не двумя версиями бизнес-логики.
@@ -255,11 +255,11 @@ Synthetic Excel import smoke implemented: generated realistic `.xlsx` files were
 2. Конкурентная эксплуатация:
    - проверить одновременное создание и проведение документов;
    - проверить проведение документов и инвентаризаций на одном складе;
-   - проверить отсутствие `database is locked` класса проблем на целевом server profile.
+   - проверить отсутствие проблем класса `database is locked` на целевом server profile.
 3. Server backup policy:
    - документированный backup/restore для PostgreSQL;
    - отдельные правила хранения backup;
-   - без переноса desktop SQLite backup UI как есть.
+   - без переноса desktop SQLite backup UI в неизменном виде.
 4. Командный режим:
    - пользователи, роли, attribution и audit trail работают в server profile;
    - object-level permissions добавлять только при подтвержденной потребности;
