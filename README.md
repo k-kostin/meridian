@@ -28,6 +28,8 @@ The project has closed `v0.4.0` Stage B operational contour work: activity histo
 
 The project is useful for local demo and pilot-style evaluation, but it is not production-complete. The current local profile now has backup/restore, user attribution, pilot-grade operational audit events, explicit SQLite deployment limits, and synthetic validation for realistic Excel onboarding shapes. Remaining commercial-readiness gaps include validation on real client Excel files, Windows installer validation, and broader desktop update/migration safety.
 
+The roadmap keeps multi-user work separate: the current SQLite desktop profile is for one active local operator, while a future Team / Multi-User profile requires a server/PostgreSQL deployment path and its own validation.
+
 ## Local Development
 
 ```bash

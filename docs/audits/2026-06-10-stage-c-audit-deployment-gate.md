@@ -2,15 +2,17 @@
 
 Date: 2026-06-10
 
+Update note: 2026-06-11 documentation alignment clarified later roadmap stages. Synthetic Real Excel onboarding validation has since been implemented and smoke-tested; real client Excel files remain pending.
+
 Scope: Stage C commercial pilot readiness slice for operational audit hardening and Local Single User deployment limits.
 
-Out of scope by explicit sequencing: Real Excel onboarding validation. It remains the next Stage C slice and must start only after a separate user command with real or realistic `.xlsx` files.
+Out of scope by explicit sequencing at the time of this gate: Real Excel onboarding validation. A later slice added synthetic realistic workbook validation; real client files are still pending.
 
 ## Verdict
 
 Passed for the audit/deployment slice.
 
-The project now has enough pilot-grade operational traceability and visible Local Single User boundaries to continue toward real Excel onboarding validation. This does not close all of Stage C and does not make the product production-grade.
+The project now has enough pilot-grade operational traceability and visible Local Single User boundaries to continue toward Excel validation and desktop installer readiness. This does not close all of Stage C and does not make the product production-grade.
 
 ## Evidence
 
@@ -32,7 +34,7 @@ The project now has enough pilot-grade operational traceability and visible Loca
 
 ## Remaining Stage C Work
 
-- Real Excel onboarding validation on real or realistic client files.
+- Real Excel onboarding validation on real client files.
 - Any import alias/mapping improvements should come from those files, not imagined ERP scenarios.
 
 ## Explicit Non-Goals

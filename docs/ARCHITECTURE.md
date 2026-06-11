@@ -1,6 +1,6 @@
 # ARCHITECTURE.md
 
-Последнее обновление: 2026-06-10
+Последнее обновление: 2026-06-11
 
 ## Текущая архитектура
 
@@ -107,6 +107,7 @@
 - Коммерческие профили отличаются инфраструктурой, конфигурацией, упаковкой и операционными гарантиями, а не отдельными accounting kernels.
 - `local_single_user` profile: SQLite, local/demo/pilot backend, один локальный компьютер, один активный оператор, desktop data-dir и backup/restore.
 - `team_multi_user` profile: будущий server/PostgreSQL deployment path для нескольких пользователей и рабочих мест.
+- `team_multi_user` profile является отдельным будущим roadmap stage, а не включаемой галочкой в текущем SQLite desktop-профиле.
 - `select_for_update()` нельзя считать полноценной гарантией row-level locking на SQLite.
 - Полноценная конкурентная многопользовательская эксплуатация требует `team_multi_user` profile или явного app-level locking design; ее нельзя заявлять на текущем SQLite-профиле.
 - Dashboard явно показывает границу `Local Single User`: SQLite, один локальный компьютер, один активный оператор, без обещания одновременной multi-user эксплуатации.
