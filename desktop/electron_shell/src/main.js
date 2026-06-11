@@ -164,7 +164,15 @@ async function stopSidecar() {
   }
 
   const processToStop = sidecarProcess;
+  if (processToStop.exitCode !== null || processToStop.signalCode !== null) {
+    return;
+  }
+
   appendLog("Stopping sidecar");
+
+  const exitPromise = new Promise((resolve) => {
+    processToStop.once("exit", resolve);
+  });
 
   if (sidecarPort) {
     try {
@@ -179,12 +187,15 @@ async function stopSidecar() {
     }
   }
 
-  setTimeout(() => {
+  const forceKillTimeout = setTimeout(() => {
     if (sidecarProcess === processToStop) {
       appendLog("Force-stopping sidecar");
-      processToStop.kill();
+      processToStop.kill("SIGKILL");
     }
   }, 3000);
+
+  await exitPromise;
+  clearTimeout(forceKillTimeout);
 }
 
 async function showStartupError(error) {
