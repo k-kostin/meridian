@@ -50,6 +50,8 @@ DEBUG = env_flag("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
 DEMO_MODE = env_flag("WAREHOUSE_DEMO_MODE", default=False)
+DESKTOP_SHUTDOWN_ENABLED = env_flag("WAREHOUSE_ENABLE_SHUTDOWN", default=False)
+DESKTOP_SHUTDOWN_TOKEN = os.getenv("WAREHOUSE_SHUTDOWN_TOKEN", "")
 WAREHOUSE_DATA_DIR = env_path("WAREHOUSE_DATA_DIR", BASE_DIR)
 DATABASE_PATH = env_path("DJANGO_DB_PATH", WAREHOUSE_DATA_DIR / "db.sqlite3")
 DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)

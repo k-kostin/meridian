@@ -148,6 +148,7 @@
   - Electron shell запускает Python sidecar;
   - sidecar выбирает динамический port;
   - `/healthz/` возвращает `{"status": "ok"}`;
+  - sidecar получает desktop-only shutdown token и завершается через `/shutdown/` с fallback hard kill;
   - `/` и `/export/items.xlsx` отвечают через `waitress`;
   - SQLite создается в Electron userData data-dir.
 

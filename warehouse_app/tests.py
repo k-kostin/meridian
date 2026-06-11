@@ -335,6 +335,26 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
 
+    def test_shutdown_is_hidden_by_default(self):
+        response = self.client.post("/shutdown/")
+
+        self.assertEqual(response.status_code, 404)
+
+    @override_settings(DESKTOP_SHUTDOWN_ENABLED=True, DESKTOP_SHUTDOWN_TOKEN="test-token")
+    def test_shutdown_rejects_missing_desktop_token(self):
+        response = self.client.post("/shutdown/")
+
+        self.assertEqual(response.status_code, 403)
+
+    @override_settings(DESKTOP_SHUTDOWN_ENABLED=True, DESKTOP_SHUTDOWN_TOKEN="test-token")
+    def test_shutdown_returns_desktop_lifecycle_payload_when_enabled(self):
+        with patch("warehouse_app.views._schedule_process_exit") as schedule_exit:
+            response = self.client.post("/shutdown/", headers={"X-Warehouse-Shutdown-Token": "test-token"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"status": "shutting_down"})
+        schedule_exit.assert_called_once_with()
+
     def test_authenticated_viewer_cannot_open_document_create(self):
         user = User.objects.create_user(username="viewer", password="pass")
         UserProfile.objects.create(user=user, role=UserRole.VIEWER)

@@ -1,6 +1,8 @@
 from datetime import date
 import logging
+import os
 from pathlib import Path
+import threading
 from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
@@ -14,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import Resolver404, resolve, reverse
 from django.utils.dateparse import parse_date
 from django.utils.http import content_disposition_header
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from .activity import (
@@ -159,6 +162,24 @@ def _get_clean_id(request: HttpRequest, key: str) -> str | None:
 
 def healthz(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"status": "ok"})
+
+
+def _schedule_process_exit(delay_seconds: float = 0.2) -> None:
+    timer = threading.Timer(delay_seconds, lambda: os._exit(0))
+    timer.daemon = True
+    timer.start()
+
+
+@csrf_exempt
+@require_POST
+def shutdown(request: HttpRequest) -> JsonResponse:
+    if not getattr(settings, "DESKTOP_SHUTDOWN_ENABLED", False):
+        raise Http404("Not found.")
+    expected_token = getattr(settings, "DESKTOP_SHUTDOWN_TOKEN", "")
+    if not expected_token or request.headers.get("X-Warehouse-Shutdown-Token") != expected_token:
+        raise PermissionDenied("Invalid shutdown token.")
+    _schedule_process_exit()
+    return JsonResponse({"status": "shutting_down"})
 
 
 def _get_page_size(request: HttpRequest, default: int = 25) -> int:
