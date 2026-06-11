@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog } = require("electron");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn } = require("node:child_process");
@@ -12,6 +13,9 @@ const READINESS_INTERVAL_MS = 400;
 let mainWindow = null;
 let sidecarProcess = null;
 let logStream = null;
+let sidecarPort = null;
+let shutdownToken = null;
+let quitAfterSidecarStop = false;
 
 function projectRoot() {
   return path.resolve(__dirname, "..", "..", "..");
@@ -71,6 +75,7 @@ function sidecarCommand() {
 
 function startSidecar(port) {
   const { command, args } = sidecarCommand();
+  shutdownToken = crypto.randomBytes(32).toString("hex");
   const env = {
     ...process.env,
     WAREHOUSE_APP_HOST: DEFAULT_HOST,
@@ -80,6 +85,8 @@ function startSidecar(port) {
     DJANGO_DEBUG: "0",
     DJANGO_ALLOWED_HOSTS: "127.0.0.1,localhost",
     WAREHOUSE_AUTO_MIGRATE: process.env.WAREHOUSE_AUTO_MIGRATE || "1",
+    WAREHOUSE_ENABLE_SHUTDOWN: "1",
+    WAREHOUSE_SHUTDOWN_TOKEN: shutdownToken,
   };
 
   appendLog(`Starting sidecar: ${command} ${args.join(" ")} port=${port}`);
@@ -158,12 +165,24 @@ async function stopSidecar() {
 
   const processToStop = sidecarProcess;
   appendLog("Stopping sidecar");
-  processToStop.kill();
+
+  if (sidecarPort) {
+    try {
+      const response = await fetch(`http://${DEFAULT_HOST}:${sidecarPort}/shutdown/`, {
+        method: "POST",
+        headers: { "X-Warehouse-Shutdown-Token": shutdownToken },
+        signal: AbortSignal.timeout(1500),
+      });
+      appendLog(`Shutdown endpoint response: HTTP ${response.status}`);
+    } catch (error) {
+      appendLog(`Shutdown endpoint failed: ${error.message}`);
+    }
+  }
 
   setTimeout(() => {
     if (sidecarProcess === processToStop) {
       appendLog("Force-stopping sidecar");
-      processToStop.kill("SIGKILL");
+      processToStop.kill();
     }
   }, 3000);
 }
@@ -187,8 +206,14 @@ app.on("second-instance", () => {
   }
 });
 
-app.on("before-quit", () => {
-  stopSidecar();
+app.on("before-quit", (event) => {
+  if (!sidecarProcess || quitAfterSidecarStop) {
+    return;
+  }
+
+  event.preventDefault();
+  quitAfterSidecarStop = true;
+  stopSidecar().finally(() => app.quit());
 });
 
 app.whenReady().then(async () => {
@@ -199,6 +224,7 @@ app.whenReady().then(async () => {
 
   try {
     const port = await findFreePort();
+    sidecarPort = port;
     startSidecar(port);
     await waitForHealthz(port);
     createWindow(port);
