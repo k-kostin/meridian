@@ -2,7 +2,7 @@
 
 Практическая дорожная карта развития проекта после текущего MVP.
 
-Последнее обновление: 2026-06-10
+Последнее обновление: 2026-06-11
 
 ## 0. Версионная рамка
 
@@ -13,9 +13,12 @@
 - `v0.2.x` — stabilization/foundation line: версия приложения, операционная история, быстрые фильтры и базовая role-aware UX-модель.
 - `v0.3.0` — Stage A closure milestone: import/onboarding flow, стартовые остатки через инвентаризацию и audit gate закрытого MVP-контура.
 - `v0.4.0` — Stage B operational contour: рабочие web-flow улучшения для повседневной эксплуатации.
-- `v0.5.0` — commercial pilot readiness: backup/restore, user attribution, audit hardening, deployment limits and real Excel onboarding validation.
-- `v0.6.0` — desktop/GUI packaging reliability milestone.
+- `v0.5.0` — commercial pilot readiness: backup/restore, user attribution, audit hardening, deployment limits and Excel onboarding validation.
+- `v0.6.0` — desktop/GUI packaging reliability for the `Local Single User` profile.
 - `v0.7.0` — focused operational analytics.
+- `v0.8.0` — `Team / Multi-User` server profile: PostgreSQL deployment, concurrent operations validation and server backup policy.
+- `v0.9.0` — planning / forecasting layer.
+- `v0.10.x` — client-side index / heavy-list performance experiments if real data volume justifies it.
 - `v1.0.0` стоит резервировать для первого стабильного pilot/production-ready релиза, где установка, поддержка, данные, backup/migration и основные ручные сценарии проверены как обычный пользовательский продукт.
 
 ## 1. Текущее положение
@@ -110,6 +113,8 @@ Stage A audit gate passed on 2026-06-04; new product work should continue from S
 
 Цель: сделать текущий маленький складской desk безопасным для первого реального клиента, а не просто функционально интересным demo.
 
+Статус: почти закрыт по backend/data/import части, но не закрыт как `v0.5.0` milestone до финального audit/release gate.
+
 Почему этот этап идет перед аналитикой:
 
 - для микробизнеса потеря локальной базы важнее отсутствия красивого графика;
@@ -154,6 +159,14 @@ Deployment limits slice implemented: dashboard and docs explicitly state the sup
 
 Synthetic validation slice implemented: parser and UI now cover realistic sheet names and header variants for item import and opening stock import. Final validation on real client files remains pending and should be done manually when real files are available.
 
+Synthetic Excel import smoke implemented: generated realistic `.xlsx` files were passed through item import and opening stock import UI endpoints. Positive files previewed/committed successfully; negative files produced expected row-level errors and did not create invalid records.
+
+Остаток для закрытия `v0.5.0`:
+
+- проверить настоящие клиентские Excel-файлы, когда они появятся;
+- решить, закрывать ли `v0.5.0` до Windows installer validation или держать installer как обязательный gate;
+- оформить короткий `v0.5.0` release/audit note после этого решения.
+
 Не включать в этот этап:
 
 - кассу, продажи, маркетплейсы, бухгалтерию;
@@ -164,6 +177,8 @@ Synthetic validation slice implemented: parser and UI now cover realistic sheet 
 ### Этап D. Desktop / GUI App
 
 Цель: упаковать текущий контур в Windows-приложение без внешнего браузера и без ручной установки Python у пользователя.
+
+Целевой milestone: `v0.6.0`.
 
 Выбранный подход:
 
@@ -189,6 +204,8 @@ Synthetic validation slice implemented: parser and UI now cover realistic sheet 
 ### Этап E. Focused Operational Analytics
 
 Цель: добавить полезную аналитику, но только после закрытия data-safety и пилотной установки.
+
+Целевой milestone: `v0.7.0`.
 
 Принцип: аналитика должна отвечать на простые операционные вопросы владельца, а не превращать систему в BI-комбайн.
 
@@ -216,9 +233,62 @@ Synthetic validation slice implemented: parser and UI now cover realistic sheet 
 - аналитику, которая требует продаж/цен/маржи до подтверждения торгового контура;
 - Superset до перехода на PostgreSQL и появления реальной BI-потребности.
 
-### Этап F. Плановый контур и прогнозирование
+### Этап F. Team / Multi-User Server Profile
+
+Цель: подготовить более дорогой коммерческий профиль для нескольких рабочих мест без развилки складского ядра.
+
+Целевой milestone: `v0.8.0`.
+
+Почему это отдельный stage:
+
+- прожарка показала, что SQLite подходит для `Local Single User`, но не должен незаметно продаваться как production-grade multi-user;
+- несколько операторов одновременно - это уже другой deployment profile, а не "чуть более смелый desktop mode";
+- user attribution и pilot audit trail уже создают foundation, но не заменяют server/PostgreSQL эксплуатацию;
+- разделение профилей должно быть коммерческим и операционным, а не двумя версиями бизнес-логики.
+
+Что должно войти:
+
+1. PostgreSQL/server deployment profile:
+   - `DATABASES` через env;
+   - отдельные production/server settings;
+   - migration path с SQLite pilot data в PostgreSQL.
+2. Конкурентная эксплуатация:
+   - проверить одновременное создание и проведение документов;
+   - проверить проведение документов и инвентаризаций на одном складе;
+   - проверить отсутствие `database is locked` класса проблем на целевом server profile.
+3. Server backup policy:
+   - документированный backup/restore для PostgreSQL;
+   - отдельные правила хранения backup;
+   - без переноса desktop SQLite backup UI как есть.
+4. Командный режим:
+   - пользователи, роли, attribution и audit trail работают в server profile;
+   - object-level permissions добавлять только при подтвержденной потребности;
+   - enterprise RBAC не включать автоматически.
+5. Deployment docs:
+   - как поднять server;
+   - как подключить рабочие места;
+   - какие гарантии отличаются от `Local Single User`;
+   - что остается тем же доменным core.
+
+Не делать в этом stage:
+
+- отдельное складское ядро для PostgreSQL;
+- переписывание UI в SPA только ради multi-user;
+- POS, бухгалтерию, маркетплейсы и продажи;
+- Superset/BI до появления реальной server database и BI-потребности.
+
+Критерий готовности:
+
+- тот же доменный flow работает на PostgreSQL/server profile;
+- конкурентные операции проверены тестами или воспроизводимыми smoke-сценариями;
+- backup/restore policy для server profile описана;
+- документация ясно различает `Local Single User` и `Team / Multi-User`.
+
+### Этап G. Плановый контур и прогнозирование
 
 Цель: добавить слой операционного планирования поверх фактического учета.
+
+Целевой milestone: `v0.9.0`.
 
 Идея:
 
@@ -257,9 +327,11 @@ Synthetic validation slice implemented: parser and UI now cover realistic sheet 
 - прогноз не должен подменять фактический учет;
 - сначала должен оставаться один источник истины для факта, потом поверх него - плановый календарь и forecast.
 
-### Этап G. Client-side index для тяжелых списков
+### Этап H. Client-side index для тяжелых списков
 
 Цель: проверить, может ли компактный клиентский индекс сделать большие списочные экраны быстрее и удобнее без перехода к полноценному SPA и без потери серверной консистентности.
+
+Целевой milestone: `v0.10.x` или отдельный performance experiment, если реальные объемы данных это оправдают.
 
 Идея паттерна:
 
@@ -544,10 +616,10 @@ SQLite начнет мешать, если:
    - audit hardening;
    - deployment limits;
    - synthetic Real Excel onboarding validation implemented; проверка настоящих клиентских Excel-файлов остается отдельным ручным шагом.
-2. Довести desktop packaging до надежного Windows installer flow.
+2. Довести desktop packaging до надежного Windows installer flow для `Local Single User`.
 3. Только после этого добавлять легкую встроенную аналитику в браузере.
-4. При первых признаках реальной многопользовательской работы перейти на `PostgreSQL`.
-5. После этого подключать Superset как внешний слой управленческой аналитики.
+4. При подтвержденном спросе на несколько рабочих мест выделить `Team / Multi-User` server profile на `PostgreSQL`, не пытаясь продавать SQLite как multi-user.
+5. После server/PostgreSQL профиля можно планировать forecasting, heavy-list performance experiments и Superset как внешний BI-слой.
 
 ## 8. Финальные мысли
 
@@ -555,4 +627,4 @@ SQLite начнет мешать, если:
 - `PostgreSQL` нужен не “потому что так принято”, а когда появляется многопользовательская эксплуатация и требования к устойчивости.
 - Встроенная аналитика через `pandas/polars` вполне совместима с текущим UX, но она не важнее backup, attribution и installer reliability.
 - `Superset` сюда хорошо вписывается, но как следующий слой зрелости, а не как первый шаг.
-- Для этого проекта лучше эволюционный путь: сначала безопасный локальный пилот, затем desktop packaging, затем легкая аналитика, затем многопользовательская надежность и BI.
+- Для этого проекта лучше эволюционный путь: сначала безопасный локальный пилот, затем desktop packaging, затем легкая аналитика, затем отдельный PostgreSQL/server profile для многопользовательской эксплуатации и только потом planning/performance/BI-слои.

@@ -1,16 +1,16 @@
 # STATUS.md
 
-Снимок проекта на 2026-06-10.
+Снимок проекта на 2026-06-11.
 
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Current development state: Stage B operational contour is closed and released as `v0.4.0`.
+- Current development state: Stage C commercial pilot readiness is in progress after `v0.4.0` Stage B closure.
 - Stage A stabilization audit: passed on 2026-06-04.
 - Stage B operational contour audit: passed on 2026-06-08.
-- Next development focus: Stage C commercial pilot readiness.
+- Stage C backend/data/import slices are mostly implemented, but `v0.5.0` is not closed until the release/audit gate decision.
 - UI/package version: `v0.4.0`.
-- Future milestone targets: `v0.5.0` for commercial pilot readiness, `v0.6.0` for desktop packaging reliability, `v0.7.0` for focused operational analytics, and `v1.0.0` only for the first stable pilot/production-ready release.
+- Future milestone targets: `v0.5.0` for commercial pilot readiness, `v0.6.0` for desktop packaging reliability, `v0.7.0` for focused operational analytics, `v0.8.0` for Team / Multi-User server profile, `v0.9.0` for planning/forecasting, `v0.10.x` for heavy-list performance experiments if needed, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
 
 ## Что сейчас работает
@@ -113,6 +113,10 @@
   - нормализация реалистичных заголовков вроде `Код склада`, `Код товара`, `Кол-во`, `Qty`;
   - commit-flow создает черновик полной инвентаризации для одного склада;
   - прямой записи остатков и автоматического проведения нет;
+- synthetic Excel onboarding smoke:
+  - позитивные синтетические `.xlsx` файлы для номенклатуры и стартовых остатков проходят preview/commit через web endpoints;
+  - негативные синтетические `.xlsx` файлы показывают ожидаемые row-level ошибки и не создают некорректные записи;
+  - проверка настоящих клиентских Excel-файлов остается отдельным ручным этапом.
 
 ## Что подготовлено по desktop/gui-app направлению
 
@@ -216,6 +220,7 @@ python manage.py test
 - нет web restore UI, scheduled backups, encryption и cloud backup;
 - SQLite остается local/demo/pilot backend для `Local Single User` профиля; production-grade многопользовательская работа не заявлена;
 - `Team / Multi-User` профиль пока не реализован: для него нужен отдельный server/PostgreSQL deployment path, но не отдельное доменное ядро;
+- `Team / Multi-User` теперь выделен в roadmap как отдельный будущий Stage F / `v0.8.0`, а не как расширение SQLite desktop-профиля;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
@@ -224,11 +229,11 @@ python manage.py test
 
 ## Рекомендуемые следующие шаги
 
-1. Выполнить отложенный Real Excel onboarding validation slice после отдельной команды пользователя.
-2. Проверить реальные или приближенные к реальным Excel-файлы для onboarding/import flow.
+1. Проверить настоящие клиентские Excel-файлы для onboarding/import flow, когда они будут доступны.
+2. Решить, закрывать ли `v0.5.0` до Windows installer validation или считать installer обязательной частью commercial pilot gate.
 3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
 4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
-5. После закрытия local pilot readiness отдельно спланировать `Team / Multi-User` профиль как server/PostgreSQL path без развилки бизнес-логики.
-6. После этого вернуться к focused operational analytics.
+5. После desktop packaging перейти к focused operational analytics, если не появится более срочный multi-user спрос.
+6. Для нескольких рабочих мест отдельно планировать `Team / Multi-User` Stage F: server/PostgreSQL profile, concurrent operations validation and server backup policy.
 7. Решить, нужны ли расширенные режимы импорта стартовых остатков: несколько складов в одном файле или авто-проведение после дополнительного подтверждения.
 8. Решить, нужны ли контрагенты, цены, barcode/labels и связь со сбытом, но только после реального клиентского сигнала.
