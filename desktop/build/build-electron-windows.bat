@@ -30,7 +30,7 @@ if errorlevel 1 exit /b %errorlevel%
 xcopy "%SIDECAR_DIST%\*" "%ELECTRON_BACKEND%\" /E /I /Y
 if errorlevel 1 exit /b %errorlevel%
 
-cd desktop\electron_shell
+cd /d "desktop\electron_shell" || exit /b 1
 
 echo Installing Electron dependencies...
 call npm install
