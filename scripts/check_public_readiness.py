@@ -72,11 +72,43 @@ TEXT_SUFFIXES = {
     ".json",
     ".md",
     ".py",
+    ".ps1",
     ".sh",
     ".txt",
     ".yml",
     ".yaml",
 }
+
+
+def is_allowed_forbidden_dir(relative: Path) -> bool:
+    parts = relative.parts
+    return parts in {
+        ("desktop", "build"),
+        ("docs", "superpowers"),
+        ("docs", "superpowers", "plans"),
+    }
+
+
+def is_allowed_desktop_build_script(relative: Path) -> bool:
+    parts = relative.parts
+    return len(parts) == 3 and parts[:2] == ("desktop", "build") and relative.suffix in {".bat", ".ps1"}
+
+
+def is_allowed_superpowers_plan(relative: Path) -> bool:
+    parts = relative.parts
+    return len(parts) == 4 and parts[:3] == ("docs", "superpowers", "plans") and relative.suffix == ".md"
+
+
+def is_allowed_public_exception(relative: Path) -> bool:
+    return is_allowed_desktop_build_script(relative) or is_allowed_superpowers_plan(relative)
+
+
+def has_forbidden_path_part(relative: Path) -> bool:
+    return any(part in FORBIDDEN_PATH_PARTS for part in relative.parts) and not is_allowed_public_exception(relative)
+
+
+def should_skip_scan_dir(relative: Path) -> bool:
+    return any(part in FORBIDDEN_PATH_PARTS for part in relative.parts) and not is_allowed_forbidden_dir(relative)
 
 
 def iter_files(root: Path, *, exclude_forbidden: bool = False):
@@ -88,18 +120,26 @@ def iter_files(root: Path, *, exclude_forbidden: bool = False):
             dirnames[:] = []
             continue
 
-        if exclude_forbidden and any(part in FORBIDDEN_PATH_PARTS for part in relative_parts):
+        if exclude_forbidden and should_skip_scan_dir(current.relative_to(root)):
             dirnames[:] = []
             continue
 
         dirnames[:] = [
             dirname
             for dirname in dirnames
-            if dirname != ".git" and not (exclude_forbidden and dirname in FORBIDDEN_PATH_PARTS)
+            if dirname != ".git"
+            and not (
+                exclude_forbidden
+                and dirname in FORBIDDEN_PATH_PARTS
+                and not is_allowed_forbidden_dir(current.relative_to(root) / dirname)
+            )
         ]
 
         for filename in filenames:
-            yield current / filename
+            path = current / filename
+            if exclude_forbidden and has_forbidden_path_part(path.relative_to(root)):
+                continue
+            yield path
 
 
 def check_required_files(root: Path) -> list[str]:
@@ -123,6 +163,9 @@ def check_forbidden_paths(root: Path) -> list[str]:
                 continue
             if dirname in FORBIDDEN_PATH_PARTS:
                 forbidden_path = relative_current / dirname if relative_current.parts else Path(dirname)
+                if is_allowed_forbidden_dir(forbidden_path):
+                    allowed_dirnames.append(dirname)
+                    continue
                 if forbidden_path not in reported_forbidden:
                     reported_forbidden.add(forbidden_path)
                     errors.append(f"forbidden path: {forbidden_path}")
@@ -131,8 +174,11 @@ def check_forbidden_paths(root: Path) -> list[str]:
         dirnames[:] = allowed_dirnames
 
         for filename in filenames:
+            relative = relative_current / filename if relative_current.parts else Path(filename)
+            if has_forbidden_path_part(relative):
+                errors.append(f"forbidden path: {relative}")
+                continue
             if filename in FORBIDDEN_FILE_NAMES:
-                relative = relative_current / filename if relative_current.parts else Path(filename)
                 errors.append(f"forbidden file: {relative}")
 
     return errors

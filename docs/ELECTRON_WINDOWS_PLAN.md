@@ -120,20 +120,26 @@ app.getPath("userData")/logs/desktop.log
 
 ## 8. Build flow
 
+Mac preflight before switching to Windows:
+
+```bash
+<repo>/.venv/bin/python manage.py check
+<repo>/.venv/bin/python manage.py test
+<repo>/.venv/bin/python scripts/check_public_readiness.py
+<repo>/.venv/bin/python scripts/smoke_sidecar.py --command <repo>/.venv/bin/python desktop/python_sidecar/serve.py
+cd desktop/electron_shell && npm run check:contract
+```
+
 Windows flow:
 
 1. Собрать Python sidecar:
-   - `desktop/build/build-sidecar-windows.bat`
-2. Скопировать sidecar onedir в:
-   - `desktop/electron_shell/resources/backend/`
+   - `desktop\build\build-sidecar-windows.bat`
+2. Smoke-test sidecar:
+   - `powershell -ExecutionPolicy Bypass -File desktop\build\smoke-sidecar-windows.ps1`
 3. Собрать Electron installer:
-   - `npm run dist:win`
-
-Общий скрипт:
-
-```bat
-desktop\build\build-electron-windows.bat
-```
+   - `desktop\build\build-electron-windows.bat`
+4. Install through generated NSIS artifact without admin rights.
+5. Verify first launch, shutdown, relaunch, Excel export, and data persistence.
 
 ## 9. Первый milestone
 

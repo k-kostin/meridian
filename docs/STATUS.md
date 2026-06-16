@@ -151,6 +151,12 @@
   - sidecar получает desktop-only shutdown token и завершается через `/shutdown/` с fallback hard kill;
   - `/` и `/export/items.xlsx` отвечают через `waitress`;
   - SQLite создается в Electron userData data-dir.
+- Stage D pre-Windows preflight scripts are prepared:
+  - Windows sidecar build script;
+  - Windows Electron build script;
+  - Windows sidecar smoke wrapper;
+  - cross-platform sidecar smoke runner;
+  - Electron packaging contract validator.
 
 ## Что проверено
 
@@ -224,6 +230,7 @@ python manage.py test
 - `Team / Multi-User` теперь выделен в roadmap как отдельный будущий Stage F / `v0.8.0`, а не как расширение SQLite desktop-профиля;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
+- Stage D pre-Windows preflight does not replace real Windows installer validation.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
 - сохраненные представления пока есть только для документов движения и текущих остатков; выбор default view, sharing и управление правами сохраненных представлений не реализованы.
 - enterprise RBAC не реализован: нет object-level permissions, приглашений, password reset и security-grade audit log.
