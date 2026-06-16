@@ -6,6 +6,7 @@ import shutil
 import signal
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
@@ -67,13 +68,23 @@ def terminate(process: subprocess.Popen[bytes], base_url: str, token: str) -> No
     process.wait(timeout=4)
 
 
-def process_output(process: subprocess.Popen[bytes]) -> str:
+def tail_file(path: Path, limit: int = 4000) -> str:
     try:
-        stdout, stderr = process.communicate(timeout=0.5)
-    except subprocess.TimeoutExpired:
+        with path.open("rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - limit))
+            content = handle.read()
+    except OSError:
         return ""
-    output = b"\n".join(part for part in (stdout, stderr) if part)
-    return output.decode("utf-8", errors="replace").strip()
+    return content.decode("utf-8", errors="replace").strip()
+
+
+def print_log_tails(stdout_log: Path, stderr_log: Path) -> None:
+    for label, path in (("stdout", stdout_log), ("stderr", stderr_log)):
+        content = tail_file(path)
+        if content:
+            print(f"\nSidecar {label} log tail ({path}):\n{content}", file=sys.stderr)
 
 
 def main() -> int:
@@ -86,6 +97,8 @@ def main() -> int:
     port = free_port()
     token = "smoke-token"
     temp_dir = Path(tempfile.mkdtemp(prefix="meridian-sidecar-smoke-"))
+    stdout_log = temp_dir / "sidecar.stdout.log"
+    stderr_log = temp_dir / "sidecar.stderr.log"
     base_url = f"http://127.0.0.1:{port}"
     env = {
         **os.environ,
@@ -99,7 +112,9 @@ def main() -> int:
         "WAREHOUSE_ENABLE_SHUTDOWN": "1",
         "WAREHOUSE_SHUTDOWN_TOKEN": token,
     }
-    process = subprocess.Popen(args.command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+    stdout_handle = stdout_log.open("wb")
+    stderr_handle = stderr_log.open("wb")
+    process = subprocess.Popen(args.command, stdout=stdout_handle, stderr=stderr_handle, env=env)
     try:
         wait_for_healthz(base_url, args.timeout)
         checks = [
@@ -114,17 +129,19 @@ def main() -> int:
                 raise RuntimeError(f"{path} response did not look valid")
         print(f"Sidecar smoke OK: {base_url}")
         return 0
-    except Exception as exc:
-        output = process_output(process)
-        if output:
-            raise RuntimeError(f"{exc}\n\nSidecar output:\n{output}") from exc
+    except Exception:
+        print_log_tails(stdout_log, stderr_log)
         raise
     finally:
-        terminate(process, base_url, token)
-        if not args.keep_data_dir:
-            shutil.rmtree(temp_dir, ignore_errors=True)
-        else:
-            print(f"Data dir kept: {temp_dir}")
+        stdout_handle.close()
+        stderr_handle.close()
+        try:
+            terminate(process, base_url, token)
+        finally:
+            if not args.keep_data_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            else:
+                print(f"Data dir kept: {temp_dir}")
 
 
 if __name__ == "__main__":
