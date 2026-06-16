@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-cd /d %~dp0\..\..
+cd /d "%~dp0\..\.." || exit /b 1
 
 set BUILD_ROOT=%LOCALAPPDATA%\MeridianBuild
 set SIDECAR_DIST=%BUILD_ROOT%\dist\warehouse-sidecar
@@ -20,7 +20,13 @@ if not exist "%SIDECAR_DIST%\warehouse-sidecar.exe" (
 
 echo Refreshing Electron backend resources...
 if exist "%ELECTRON_BACKEND%" rmdir /s /q "%ELECTRON_BACKEND%"
+if errorlevel 1 exit /b %errorlevel%
+if exist "%ELECTRON_BACKEND%" (
+  echo ERROR: failed to remove existing backend resources: %ELECTRON_BACKEND%
+  exit /b 1
+)
 mkdir "%ELECTRON_BACKEND%"
+if errorlevel 1 exit /b %errorlevel%
 xcopy "%SIDECAR_DIST%\*" "%ELECTRON_BACKEND%\" /E /I /Y
 if errorlevel 1 exit /b %errorlevel%
 

@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-cd /d %~dp0\..\..
+cd /d "%~dp0\..\.." || exit /b 1
 
 set BUILD_ROOT=%LOCALAPPDATA%\MeridianBuild
 set DIST_ROOT=%BUILD_ROOT%\dist

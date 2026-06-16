@@ -5,6 +5,9 @@ db.sqlite3
 .DS_Store
 .playwright-cli/
 build/
+!desktop/build/
+!desktop/build/*.bat
+!desktop/build/*.ps1
 dist/
 node_modules/
 desktop/electron_shell/dist/
