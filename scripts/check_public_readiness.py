@@ -107,6 +107,10 @@ def has_forbidden_path_part(relative: Path) -> bool:
     return any(part in FORBIDDEN_PATH_PARTS for part in relative.parts) and not is_allowed_public_exception(relative)
 
 
+def should_skip_scan_dir(relative: Path) -> bool:
+    return any(part in FORBIDDEN_PATH_PARTS for part in relative.parts) and not is_allowed_forbidden_dir(relative)
+
+
 def iter_files(root: Path, *, exclude_forbidden: bool = False):
     for current_root, dirnames, filenames in os.walk(root):
         current = Path(current_root)
@@ -116,7 +120,7 @@ def iter_files(root: Path, *, exclude_forbidden: bool = False):
             dirnames[:] = []
             continue
 
-        if exclude_forbidden and has_forbidden_path_part(current.relative_to(root)):
+        if exclude_forbidden and should_skip_scan_dir(current.relative_to(root)):
             dirnames[:] = []
             continue
 
@@ -132,7 +136,10 @@ def iter_files(root: Path, *, exclude_forbidden: bool = False):
         ]
 
         for filename in filenames:
-            yield current / filename
+            path = current / filename
+            if exclude_forbidden and has_forbidden_path_part(path.relative_to(root)):
+                continue
+            yield path
 
 
 def check_required_files(root: Path) -> list[str]:
