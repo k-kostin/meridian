@@ -135,7 +135,10 @@ def main() -> int:
     finally:
         try:
             if process is not None:
-                terminate(process, base_url, token)
+                try:
+                    terminate(process, base_url, token)
+                except Exception as exc:
+                    print(f"Warning: failed to terminate sidecar process: {exc}", file=sys.stderr)
         finally:
             stdout_handle.close()
             stderr_handle.close()
