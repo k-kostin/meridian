@@ -38,7 +38,7 @@
 
 `check_changed.py` is an opt-in guardrail for targeted source edits.
 
-The project is not currently a git repository, so the script does not infer changed files from `git diff`. Pass touched files explicitly:
+The script does not infer changed files from `git diff`. Pass touched files explicitly:
 
 ```bash
 source .venv/bin/activate
