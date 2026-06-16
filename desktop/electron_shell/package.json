@@ -6,6 +6,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "check:contract": "node scripts/check-packaging-contract.js",
     "dist:win": "electron-builder --win nsis",
     "pack:win": "electron-builder --win dir"
   },
