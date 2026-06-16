@@ -155,6 +155,14 @@ Shell делает только orchestration:
   - отдельная сборка backend-sidecar;
   - отдельная сборка `pywebview` shell.
 
+Pre-Windows preflight should pass on macOS before switching to Windows:
+
+- Django checks and full tests;
+- public-readiness check;
+- source sidecar smoke via `scripts/smoke_sidecar.py`;
+- Electron main syntax check;
+- Electron packaging contract check.
+
 ## Что еще не сделано
 
 - нет собранного Windows `.exe` / `.msi`;

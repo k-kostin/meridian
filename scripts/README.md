@@ -55,3 +55,17 @@ Behavior:
 - `--dry-run`: print selected commands without running them.
 
 Use this before broader verification after changing a small set of files. It is not a replacement for the full test suite before significant releases or packaging work.
+
+## Stage D Pre-Windows Preflight
+
+Before moving to a real Windows machine, run from repo root:
+
+```bash
+<repo>/.venv/bin/python manage.py check
+<repo>/.venv/bin/python manage.py test
+<repo>/.venv/bin/python scripts/check_public_readiness.py
+<repo>/.venv/bin/python scripts/smoke_sidecar.py --command <repo>/.venv/bin/python desktop/python_sidecar/serve.py
+node --check desktop/electron_shell/src/main.js
+node --check desktop/electron_shell/scripts/check-packaging-contract.js
+cd desktop/electron_shell && npm run check:contract
+```

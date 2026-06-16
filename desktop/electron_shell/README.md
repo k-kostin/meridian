@@ -44,6 +44,14 @@ python desktop/python_sidecar/serve.py
 WAREHOUSE_PYTHON=/path/to/python npm start
 ```
 
+Contract check:
+
+```bash
+npm run check:contract
+```
+
+This validates the Electron packaging assumptions: backend resource location, per-user NSIS settings, dynamic port selection, shutdown token, and no fixed `127.0.0.1:8000` dependency.
+
 Проверено на macOS:
 
 - shell запускает Python sidecar;
