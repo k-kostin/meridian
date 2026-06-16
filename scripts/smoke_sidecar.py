@@ -114,8 +114,10 @@ def main() -> int:
     }
     stdout_handle = stdout_log.open("wb")
     stderr_handle = stderr_log.open("wb")
-    process = subprocess.Popen(args.command, stdout=stdout_handle, stderr=stderr_handle, env=env)
+    process: subprocess.Popen[bytes] | None = None
+    success = False
     try:
+        process = subprocess.Popen(args.command, stdout=stdout_handle, stderr=stderr_handle, env=env)
         wait_for_healthz(base_url, args.timeout)
         checks = [
             ("/", b"<html"),
@@ -128,16 +130,17 @@ def main() -> int:
             if expected not in body[:200]:
                 raise RuntimeError(f"{path} response did not look valid")
         print(f"Sidecar smoke OK: {base_url}")
+        success = True
         return 0
-    except Exception:
-        print_log_tails(stdout_log, stderr_log)
-        raise
     finally:
-        stdout_handle.close()
-        stderr_handle.close()
         try:
-            terminate(process, base_url, token)
+            if process is not None:
+                terminate(process, base_url, token)
         finally:
+            stdout_handle.close()
+            stderr_handle.close()
+            if not success:
+                print_log_tails(stdout_log, stderr_log)
             if not args.keep_data_dir:
                 shutil.rmtree(temp_dir, ignore_errors=True)
             else:
