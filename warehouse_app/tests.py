@@ -1214,6 +1214,187 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(issue.status, DocumentStatus.DRAFT)
 
+    def test_backdated_issue_cannot_make_later_balance_negative(self):
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("10"))
+        receipt.post()
+
+        later_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 10),
+        )
+        StockDocumentLine.objects.create(document=later_issue, item=self.item, quantity=Decimal("-10"))
+        later_issue.post()
+
+        backdated_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 5),
+        )
+        StockDocumentLine.objects.create(document=backdated_issue, item=self.item, quantity=Decimal("-5"))
+
+        with self.assertRaises(ValidationError):
+            backdated_issue.post()
+
+        backdated_issue.refresh_from_db()
+        self.assertEqual(backdated_issue.status, DocumentStatus.DRAFT)
+        self.assertEqual(get_balance_map(self.warehouse).get(self.item.id, Decimal("0")), Decimal("0"))
+
+    def test_backdated_issue_rejects_intermediate_negative_balance_even_if_later_receipt_recovers_it(self):
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("10"))
+        receipt.post()
+
+        later_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 10),
+        )
+        StockDocumentLine.objects.create(document=later_issue, item=self.item, quantity=Decimal("-10"))
+        later_issue.post()
+
+        recovery_receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 20),
+        )
+        StockDocumentLine.objects.create(document=recovery_receipt, item=self.item, quantity=Decimal("5"))
+        recovery_receipt.post()
+
+        backdated_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 5),
+        )
+        StockDocumentLine.objects.create(document=backdated_issue, item=self.item, quantity=Decimal("-5"))
+
+        with self.assertRaises(ValidationError):
+            backdated_issue.post()
+
+        self.assertEqual(get_balance_map(self.warehouse)[self.item.id], Decimal("5"))
+
+    def test_backdated_transfer_cannot_make_later_source_balance_negative(self):
+        destination = Warehouse.objects.create(code="reserve", name="Резервный склад")
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("10"))
+        receipt.post()
+
+        later_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 10),
+        )
+        StockDocumentLine.objects.create(document=later_issue, item=self.item, quantity=Decimal("-10"))
+        later_issue.post()
+
+        transfer = StockDocument.objects.create(
+            document_type=StockDocumentType.TRANSFER,
+            warehouse=self.warehouse,
+            destination_warehouse=destination,
+            operation_date=date(2026, 3, 5),
+        )
+        StockDocumentLine.objects.create(document=transfer, item=self.item, quantity=Decimal("5"))
+
+        with self.assertRaises(ValidationError):
+            transfer.post()
+
+        transfer.refresh_from_db()
+        self.assertEqual(transfer.status, DocumentStatus.DRAFT)
+        self.assertEqual(get_balance_map(self.warehouse).get(self.item.id, Decimal("0")), Decimal("0"))
+        self.assertEqual(get_balance_map(destination).get(self.item.id, Decimal("0")), Decimal("0"))
+
+    def test_backdated_issue_validation_ignores_other_items_and_warehouses(self):
+        other_warehouse = Warehouse.objects.create(code="reserve", name="Резервный склад")
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("10"))
+        receipt.post()
+
+        legacy_other_item_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 10),
+            status=DocumentStatus.POSTED,
+            posted_at=timezone.now(),
+        )
+        StockDocumentLine.objects.create(
+            document=legacy_other_item_issue,
+            item=self.second_item,
+            quantity=Decimal("-3"),
+        )
+        legacy_other_warehouse_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=other_warehouse,
+            operation_date=date(2026, 3, 10),
+            status=DocumentStatus.POSTED,
+            posted_at=timezone.now(),
+        )
+        StockDocumentLine.objects.create(
+            document=legacy_other_warehouse_issue,
+            item=self.item,
+            quantity=Decimal("-3"),
+        )
+
+        backdated_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 5),
+        )
+        StockDocumentLine.objects.create(document=backdated_issue, item=self.item, quantity=Decimal("-5"))
+
+        backdated_issue.post()
+
+        backdated_issue.refresh_from_db()
+        self.assertEqual(backdated_issue.status, DocumentStatus.POSTED)
+        self.assertEqual(get_balance_map(self.warehouse)[self.item.id], Decimal("5"))
+
+    def test_same_day_stock_validation_uses_daily_closing_balance(self):
+        operation_date = date(2026, 3, 5)
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=operation_date,
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("10"))
+        receipt.post()
+
+        first_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=operation_date,
+        )
+        StockDocumentLine.objects.create(document=first_issue, item=self.item, quantity=Decimal("-6"))
+        first_issue.post()
+
+        second_issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=operation_date,
+        )
+        StockDocumentLine.objects.create(document=second_issue, item=self.item, quantity=Decimal("-4"))
+
+        second_issue.post()
+
+        second_issue.refresh_from_db()
+        self.assertEqual(second_issue.status, DocumentStatus.POSTED)
+        self.assertEqual(get_balance_map(self.warehouse).get(self.item.id, Decimal("0")), Decimal("0"))
+
     def test_inventory_creates_adjustment_and_aligns_balance(self):
         self._receipt(self.item, "10")
         inventory = InventoryDocument.objects.create(

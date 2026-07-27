@@ -766,6 +766,36 @@ def get_movement_rows(warehouse=None, date_from=None, date_to=None, document_typ
     return events
 
 
+def find_negative_balance_item_ids_after_candidate(warehouse, operation_date, candidate_deltas):
+    candidate_deltas = {
+        item_id: Decimal(quantity)
+        for item_id, quantity in candidate_deltas.items()
+        if quantity
+    }
+    if not candidate_deltas:
+        return set()
+
+    if operation_date > date.min:
+        balances = get_balance_map(warehouse, as_of_date=operation_date - timedelta(days=1))
+    else:
+        balances = {}
+
+    daily_deltas = {operation_date: dict(candidate_deltas)}
+    for event in get_movement_rows(warehouse=warehouse, date_from=operation_date):
+        if event.item_id not in candidate_deltas:
+            continue
+        day_deltas = daily_deltas.setdefault(event.operation_date, {})
+        day_deltas[event.item_id] = day_deltas.get(event.item_id, Decimal("0")) + event.quantity
+
+    negative_item_ids = set()
+    for movement_date in sorted(daily_deltas):
+        for item_id, quantity in daily_deltas[movement_date].items():
+            balances[item_id] = balances.get(item_id, Decimal("0")) + quantity
+            if balances[item_id] < 0:
+                negative_item_ids.add(item_id)
+    return negative_item_ids
+
+
 def resolve_period(mode, anchor_date=None, date_from=None, date_to=None):
     today = timezone.localdate()
     mode = mode or "day"
