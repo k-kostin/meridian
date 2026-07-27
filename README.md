@@ -26,7 +26,7 @@ This repository starts from the `v0.1 MVP Baseline` and is now evolving through 
 
 The project has closed `v0.4.0` Stage B operational contour work: activity history, built-in quick filter presets, basic `admin / operator / viewer` role UX, Excel nomenclature import with preview/validation, opening stock import through draft full inventory documents, item categories, category-aware filters, and saved views for key lists.
 
-The project is useful for local demo and pilot-style evaluation, but it is not production-complete. The current local profile now has backup/restore, user attribution, pilot-grade operational audit events, explicit SQLite deployment limits, and synthetic validation for realistic Excel onboarding shapes. Remaining commercial-readiness gaps include validation on real client Excel files, Windows installer validation, and broader desktop update/migration safety.
+The current code is marked `v0.5.0-rc.1`: a commercial-pilot release candidate, not a final installer release. The local profile now has backup/restore, user attribution, pilot-grade operational audit events, explicit SQLite deployment limits, transactional imports, backdated stock invariants, spreadsheet formula-injection protection, and synthetic validation for realistic Excel onboarding shapes. Remaining acceptance gates are validation on real client Excel files and a real Windows/NSIS run without admin rights.
 
 The roadmap keeps multi-user work separate: the current SQLite desktop profile is for one active local operator, while a future Team / Multi-User profile requires a server/PostgreSQL deployment path and its own validation.
 

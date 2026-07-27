@@ -1,5 +1,7 @@
 # Stage D Pre-Windows Preflight Implementation Plan
 
+> Historical implementation plan. Its completed preflight work has been superseded by the current release-hardening plan and desktop documentation.
+
 > **For agentic workers:** Use the repo implementation-plan workflow to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Close the maximum number of Stage D packaging-readiness questions on macOS before manual real Excel validation and before running the app on a real Windows machine.
