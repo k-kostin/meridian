@@ -411,7 +411,7 @@ def commit_items_import(
     return ItemImportCommitResult(created_count=len(result.rows), updated_count=0, errors=[])
 
 
-def commit_opening_inventory_import(result: OpeningInventoryImportResult) -> OpeningInventoryImportCommitResult:
+def commit_opening_inventory_import(result: OpeningInventoryImportResult, *, actor=None) -> OpeningInventoryImportCommitResult:
     errors = validate_opening_inventory_import_result(result)
     warehouse_codes = {row.warehouse_code for row in result.rows if row.warehouse_code}
     if len(warehouse_codes) > 1:
@@ -427,12 +427,15 @@ def commit_opening_inventory_import(result: OpeningInventoryImportResult) -> Ope
 
     warehouse = Warehouse.objects.get(code=result.rows[0].warehouse_code)
     items = Item.objects.in_bulk([row.sku for row in result.rows], field_name="sku")
+    attribution_actor = actor if getattr(actor, "is_authenticated", False) else None
     with transaction.atomic():
         inventory = InventoryDocument.objects.create(
             warehouse=warehouse,
             inventory_date=timezone.localdate(),
             scope=InventoryScope.FULL,
             comment="Импорт стартовых остатков из Excel. Проверьте строки перед проведением.",
+            created_by=attribution_actor,
+            updated_by=attribution_actor,
         )
         InventoryLine.objects.bulk_create(
             [

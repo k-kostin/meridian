@@ -35,8 +35,8 @@
   - idempotent event creation for posting workflows.
 - `imports.py`
   - чтение, preview/validation и commit-flow для Excel import/onboarding flow;
-  - импорт номенклатуры создает только новые `Item`;
-  - импорт стартовых остатков создает черновик полной `InventoryDocument`;
+  - импорт номенклатуры по умолчанию создает новые `Item`, а явный update mode обновляет существующие позиции;
+  - импорт стартовых остатков создает черновик полной `InventoryDocument` с attribution авторизованного пользователя;
   - не пишет остатки напрямую и не проводит инвентаризацию автоматически.
 - `ActivityEvent`
   - хранит компактную историю складо-влияющих событий;
@@ -60,6 +60,7 @@
 - `views.py`
   - прием параметров из HTTP;
   - orchestration между формами, сервисами и шаблонами;
+  - import commit и обязательное pilot-grade activity event выполняются в одной внешней транзакции;
   - встроенные quick-filter presets для часто используемых списочных представлений;
   - без сложной доменной логики.
 - `tests.py`

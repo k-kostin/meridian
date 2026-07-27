@@ -500,12 +500,15 @@ class InventoryDocument(TimeStampedModel):
 
         adjustment = None
         if adjustment_lines:
+            attribution_actor = posted_by if getattr(posted_by, "is_authenticated", False) else None
             adjustment = StockDocument.objects.create(
                 document_type=StockDocumentType.ADJUSTMENT,
                 warehouse=locked_inventory.warehouse,
                 operation_date=locked_inventory.inventory_date,
                 comment=f"Автокорректировка по инвентаризации {locked_inventory.number}",
                 source_inventory=locked_inventory,
+                created_by=attribution_actor,
+                updated_by=attribution_actor,
             )
             for line in adjustment_lines:
                 line.document = adjustment
