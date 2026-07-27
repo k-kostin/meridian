@@ -334,16 +334,22 @@ class StockDocument(TimeStampedModel):
         if not lines:
             raise ValidationError("Документ нельзя провести без строк.")
 
-        from .services import get_balance_map
+        from .services import find_negative_balance_item_ids_after_candidate
 
         if locked_document.document_type in {StockDocumentType.ISSUE, StockDocumentType.TRANSFER}:
-            balances = get_balance_map(locked_document.warehouse, as_of_date=locked_document.operation_date)
+            candidate_deltas = {}
             for line in lines:
                 quantity_delta = line.quantity if locked_document.document_type == StockDocumentType.ISSUE else -abs(line.quantity)
-                balances[line.item_id] = balances.get(line.item_id, Decimal("0")) + quantity_delta
-                if balances[line.item_id] < 0:
-                    action_label = "расхода" if locked_document.document_type == StockDocumentType.ISSUE else "перемещения"
-                    raise ValidationError(f"Недостаточно остатка по позиции «{line.item.name}» для проведения {action_label}.")
+                candidate_deltas[line.item_id] = candidate_deltas.get(line.item_id, Decimal("0")) + quantity_delta
+            negative_item_ids = find_negative_balance_item_ids_after_candidate(
+                locked_document.warehouse,
+                locked_document.operation_date,
+                candidate_deltas,
+            )
+            if negative_item_ids:
+                insufficient_item = next(line.item for line in lines if line.item_id in negative_item_ids)
+                action_label = "расхода" if locked_document.document_type == StockDocumentType.ISSUE else "перемещения"
+                raise ValidationError(f"Недостаточно остатка по позиции «{insufficient_item.name}» для проведения {action_label}.")
 
         locked_document.status = DocumentStatus.POSTED
         locked_document.posted_at = timezone.now()
