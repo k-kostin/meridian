@@ -13,6 +13,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 import os
 from pathlib import Path
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -50,6 +52,10 @@ DEBUG = env_flag("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost,testserver")
 DEMO_MODE = env_flag("WAREHOUSE_DEMO_MODE", default=False)
+LOCAL_TRUSTED_MODE = env_flag("WAREHOUSE_LOCAL_TRUSTED_MODE", default=False)
+LOCAL_TRUSTED_HOST = os.getenv("WAREHOUSE_APP_HOST", "127.0.0.1")
+if LOCAL_TRUSTED_MODE and LOCAL_TRUSTED_HOST not in {"127.0.0.1", "localhost", "::1"}:
+    raise ImproperlyConfigured("WAREHOUSE_LOCAL_TRUSTED_MODE requires a loopback WAREHOUSE_APP_HOST.")
 DESKTOP_SHUTDOWN_ENABLED = env_flag("WAREHOUSE_ENABLE_SHUTDOWN", default=False)
 DESKTOP_SHUTDOWN_TOKEN = os.getenv("WAREHOUSE_SHUTDOWN_TOKEN", "")
 WAREHOUSE_DATA_DIR = env_path("WAREHOUSE_DATA_DIR", BASE_DIR)

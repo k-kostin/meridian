@@ -1,6 +1,6 @@
 # STATUS.md
 
-Снимок проекта на 2026-06-11.
+Снимок проекта на 2026-07-27.
 
 ## Version Baseline
 
@@ -36,7 +36,8 @@
 - отдельные листы по каждому складу в Excel-выгрузке аналитики при режиме `По складам`;
 - ручное создание, просмотр и скачивание локальных SQLite backup для `Local Single User` профиля;
 - restore procedure через management command с обязательным `--confirm`;
-- automatic `pre_migration` backup в desktop sidecar для существующей SQLite-базы;
+- automatic `pre_migration` backup в desktop sidecar только перед реально ожидающими миграциями существующей SQLite-базы;
+- retention пяти последних автоматических pre-migration копий без удаления ручных backup;
 - поиск, пагинация и выбор размера страницы в списочных разделах и на экране текущих остатков;
 - асинхронный live-search на экране текущих остатков без потери фокуса поля ввода;
 - автоматический возврат к полному списку при очистке поисковой строки в списочных разделах;
@@ -77,7 +78,8 @@
   - `admin` может выполнять все действия;
   - `operator` может выполнять складские операции, но не редактировать справочники и не перезагружать демо-данные;
   - `viewer` может читать списки, карточки, отчеты и Excel-выгрузки без write-действий;
-  - анонимный локальный режим сохраняет текущий demo/desktop MVP-flow;
+  - явный `WAREHOUSE_LOCAL_TRUSTED_MODE` дает Electron loopback-сессии права локального single user без смешения с demo mode;
+  - обычный production web anonymous остается viewer, а trusted-local mode запрещен на non-loopback host;
 - parser-only foundation для импорта Excel-номенклатуры:
   - чтение листа `Номенклатура`, `Товары`, `Справочник`, `Items` или активного листа;
   - preview-строки по `Артикул / Наименование / Единица / Активна / Комментарий`;
@@ -230,6 +232,10 @@ python manage.py test
 - `Team / Multi-User` теперь выделен в roadmap как отдельный будущий Stage F / `v0.8.0`, а не как расширение SQLite desktop-профиля;
 - Windows desktop-сборка еще не собрана и не проверена на чистой машине.
 - Electron shell scaffold добавлен и проверен в dev-smoke на macOS, но еще не проверен через Windows NSIS installer.
+- Electron использует per-install Django secret из user data, locked Node toolchain (`Electron 43.2.0`, `electron-builder 26.15.3`, `package-lock.json`, `npm ci`) и PyInstaller `onedir` без UPX.
+- Fresh-profile sidecar smoke на macOS проходит создание справочников, приход, проведение, остатки, Excel, ручной backup и повторный запуск; migration smoke подтверждает одну копию перед upgrade и отсутствие копий при no-op restart.
+- Полная загрузка Electron 43 runtime на macOS в текущей сессии зависла на внешнем download; Windows build/launch остается обязательным gate.
+- `npm audit` после upgrade не показывает critical или известные Electron runtime advisories, но остается 16 high build-time advisories в транзитивных утилитах electron-builder; повторный audit и оценка обновления обязательны перед публичным installer release.
 - Stage D pre-Windows preflight does not replace real Windows installer validation.
 - Tauri shell пока зафиксирован как структура и экспериментальная стратегия, но не развернут как готовый toolchain-проект.
 - сохраненные представления пока есть только для документов движения и текущих остатков; выбор default view, sharing и управление правами сохраненных представлений не реализованы.

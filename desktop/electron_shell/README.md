@@ -25,10 +25,12 @@ Electron shell не содержит бизнес-логики. Он тольк�
 
 ## Development run
 
+Поддерживаемый build-runtime: Node.js `22.12+` и npm `10+`. Версии Electron и electron-builder закреплены в `package.json` и `package-lock.json`.
+
 Из этой папки:
 
 ```bash
-npm install
+npm ci
 npm start
 ```
 
@@ -88,9 +90,13 @@ Electron передает sidecar:
 ```text
 WAREHOUSE_DATA_DIR=<Electron userData>/data
 DJANGO_DB_PATH=<Electron userData>/data/db.sqlite3
+DJANGO_SECRET_KEY=<stable per-install secret from data/django-secret.key>
+WAREHOUSE_LOCAL_TRUSTED_MODE=1
 WAREHOUSE_ENABLE_SHUTDOWN=1
 WAREHOUSE_SHUTDOWN_TOKEN=<random runtime token>
 ```
+
+`WAREHOUSE_LOCAL_TRUSTED_MODE` дает локальному анонимному пользователю права одного оператора только в Electron-контуре на loopback host. Обычный web/server запуск без этого флага остается read-only для анонимного пользователя.
 
 Логи shell:
 
@@ -105,3 +111,5 @@ WAREHOUSE_SHUTDOWN_TOKEN=<random runtime token>
 - Не переносить Excel-логику в Electron.
 - Не делать portable основным каналом поставки.
 - Не включать `/shutdown/` без runtime token.
+- Не включать `WAREHOUSE_LOCAL_TRUSTED_MODE` при bind на внешний интерфейс.
+- Не логировать `DJANGO_SECRET_KEY` и не хранить его в bundled resources.

@@ -1,6 +1,6 @@
 # DESKTOP_APP.md
 
-Последнее обновление: 2026-05-08
+Последнее обновление: 2026-07-27
 
 ## Зачем появился desktop/gui-app трек
 
@@ -142,10 +142,13 @@ Shell делает только orchestration:
 - создан быстрый `pywebview` shell launcher;
 - вынесен путь к рабочей SQLite-базе в desktop-friendly env-конфигурацию (`WAREHOUSE_DATA_DIR` / `DJANGO_DB_PATH`);
 - для Local Single User deployments user data directory содержит SQLite-базу и `backups/`;
-- перед автоматической миграцией sidecar создает `pre_migration` backup, если база уже существует;
+- desktop shell включает explicit trusted-local profile только на loopback; обычный server/web anonymous остается read-only;
+- Electron создает стабильный per-install Django secret в user data и не использует общий встроенный ключ;
+- sidecar создает `pre_migration` backup только при непустом плане миграций существующей базы и хранит пять последних автоматических копий;
 - добавлен desktop-only shutdown endpoint: он скрыт по умолчанию, включается только через env-флаг sidecar и требует runtime token от Electron shell;
 - добавлены стартовые `PyInstaller` spec-файлы и Windows build-скрипты для prototype-path;
 - добавлен primary path (`Electron`) и отделен от экспериментального path (`Tauri`) и fallback-path (`pywebview`).
+- Electron build-toolchain закреплен `package-lock.json`, Windows build использует `npm ci`, PyInstaller UPX отключен;
 - на macOS уже проверен sidecar-path:
   - launcher из исходников поднимает приложение через `waitress`;
   - выполняет auto-migrate на пустом data-dir;
@@ -162,6 +165,7 @@ Pre-Windows preflight should pass on macOS before switching to Windows:
 - source sidecar smoke via `scripts/smoke_sidecar.py`;
 - Electron main syntax check;
 - Electron packaging contract check.
+- fresh-profile и migration-upgrade sidecar smoke.
 
 ## Что еще не сделано
 
@@ -169,6 +173,7 @@ Pre-Windows preflight should pass on macOS before switching to Windows:
 - Electron scaffold добавлен, но еще не прошел Windows installer validation;
 - нет Tauri scaffold с toolchain и bundle config; Tauri теперь экспериментальный path;
 - не проверены packaging-size и signing-сценарии;
+- не проверены Windows Defender/EDR false positives для итогового unsigned sidecar;
 - не выбрана финальная схема auto-update;
 - не добавлены desktop-specific icons и installer assets.
 

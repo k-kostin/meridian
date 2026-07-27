@@ -16,7 +16,14 @@ from django.urls import reverse
 from django.utils import timezone
 from openpyxl import Workbook, load_workbook
 
-from .backups import BackupError, configured_backup_paths, create_local_backup, create_pre_migration_backup_if_needed, restore_local_backup
+from .backups import (
+    BackupError,
+    configured_backup_paths,
+    create_local_backup,
+    create_pre_migration_backup_if_needed,
+    prune_pre_migration_backups,
+    restore_local_backup,
+)
 from .demo import seed_demo_data
 from .version import APP_VERSION_LABEL
 from .models import (
@@ -161,6 +168,24 @@ class LocalBackupServiceTests(TestCase):
             self.assertIsNone(record.pk)
             self.assertTrue(Path(record.backup_path).exists())
             self.assertEqual(record.kind, BackupKind.PRE_MIGRATION)
+
+    def test_prune_pre_migration_backups_keeps_newest_and_manual_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            backup_dir = Path(temp_dir)
+            automatic_paths = []
+            for index in range(5):
+                backup_path = backup_dir / f"meridian-2026010{index + 1}-120000-pre_migration.sqlite3"
+                backup_path.write_bytes(str(index).encode())
+                automatic_paths.append(backup_path)
+            manual_path = backup_dir / "meridian-20260101-130000-manual.sqlite3"
+            manual_path.write_bytes(b"manual")
+
+            removed_paths = prune_pre_migration_backups(backup_dir=backup_dir, keep=2)
+
+            self.assertEqual(removed_paths, automatic_paths[:3])
+            self.assertFalse(any(path.exists() for path in automatic_paths[:3]))
+            self.assertTrue(all(path.exists() for path in automatic_paths[3:]))
+            self.assertTrue(manual_path.exists())
 
     def test_manual_backup_fails_when_metadata_cannot_be_saved(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -385,6 +410,12 @@ class WarehouseFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 403)
 
+    @override_settings(DEMO_MODE=False, LOCAL_TRUSTED_MODE=True)
+    def test_anonymous_local_trusted_user_can_open_document_create(self):
+        response = self.client.get("/documents/new/")
+
+        self.assertEqual(response.status_code, 200)
+
     @override_settings(DEMO_MODE=False)
     def test_anonymous_production_user_sees_guest_role_label(self):
         response = self.client.get("/")
@@ -392,6 +423,14 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Гость")
         self.assertNotContains(response, "Локальный режим")
+
+    @override_settings(DEMO_MODE=False, LOCAL_TRUSTED_MODE=True)
+    def test_anonymous_local_trusted_user_sees_local_role_label(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Локальный режим")
+        self.assertNotContains(response, "Гость")
 
     @override_settings(DEMO_MODE=True)
     def test_anonymous_demo_user_keeps_current_document_create_flow(self):

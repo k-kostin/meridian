@@ -122,6 +122,34 @@ def create_pre_migration_backup_if_needed() -> BackupRecord | None:
     )
 
 
+def prune_pre_migration_backups(*, backup_dir: Path | None = None, keep: int = 5) -> list[Path]:
+    if keep < 0:
+        raise ValueError("keep must be non-negative")
+
+    paths = configured_backup_paths()
+    target_dir = Path(backup_dir or paths.backup_dir).expanduser()
+    if not target_dir.exists():
+        return []
+
+    automatic_backups = sorted(target_dir.glob("meridian-*-pre_migration.sqlite3"))
+    obsolete_backups = automatic_backups[:-keep] if keep else automatic_backups
+    removed_paths = []
+    for backup_path in obsolete_backups:
+        try:
+            backup_path.unlink()
+        except OSError as exc:
+            raise BackupError(f"Cannot remove old pre-migration backup {backup_path}: {exc}") from exc
+        try:
+            BackupRecord.objects.filter(
+                kind=BackupKind.PRE_MIGRATION,
+                backup_path=str(backup_path),
+            ).delete()
+        except DatabaseError as exc:
+            raise BackupError(f"Old backup file was removed but its metadata could not be pruned: {exc}") from exc
+        removed_paths.append(backup_path)
+    return removed_paths
+
+
 def remove_sqlite_sidecar_files(database_path: Path) -> None:
     for suffix in ("-wal", "-shm"):
         side_file = database_path.with_name(database_path.name + suffix)
