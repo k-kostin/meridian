@@ -11,7 +11,8 @@ from .models import UserProfile, UserRole
 
 def get_user_role(user) -> str:
     if not user.is_authenticated:
-        return UserRole.ADMIN if settings.DEMO_MODE else UserRole.VIEWER
+        local_admin = settings.DEMO_MODE or settings.LOCAL_TRUSTED_MODE
+        return UserRole.ADMIN if local_admin else UserRole.VIEWER
     if user.is_superuser:
         return UserRole.ADMIN
     if hasattr(user, "_cached_warehouse_role"):

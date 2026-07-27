@@ -34,6 +34,36 @@ function logsDir() {
   return ensureDir(path.join(app.getPath("userData"), "logs"));
 }
 
+function loadOrCreateDjangoSecret() {
+  const secretPath = path.join(dataDir(), "django-secret.key");
+  try {
+    const existingSecret = fs.readFileSync(secretPath, "utf8").trim();
+    if (!existingSecret) {
+      throw new Error(`Django secret file is empty: ${secretPath}`);
+    }
+    return existingSecret;
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  const newSecret = crypto.randomBytes(48).toString("base64url");
+  try {
+    fs.writeFileSync(secretPath, `${newSecret}\n`, { encoding: "utf8", flag: "wx", mode: 0o600 });
+    return newSecret;
+  } catch (error) {
+    if (error.code !== "EEXIST") {
+      throw error;
+    }
+    const existingSecret = fs.readFileSync(secretPath, "utf8").trim();
+    if (!existingSecret) {
+      throw new Error(`Django secret file is empty: ${secretPath}`);
+    }
+    return existingSecret;
+  }
+}
+
 function appendLog(message) {
   if (!logStream) {
     logStream = fs.createWriteStream(path.join(logsDir(), "desktop.log"), { flags: "a" });
@@ -82,8 +112,10 @@ function startSidecar(port) {
     WAREHOUSE_APP_PORT: String(port),
     WAREHOUSE_DATA_DIR: dataDir(),
     DJANGO_DB_PATH: path.join(dataDir(), "db.sqlite3"),
+    DJANGO_SECRET_KEY: loadOrCreateDjangoSecret(),
     DJANGO_DEBUG: "0",
     DJANGO_ALLOWED_HOSTS: "127.0.0.1,localhost",
+    WAREHOUSE_LOCAL_TRUSTED_MODE: "1",
     WAREHOUSE_AUTO_MIGRATE: process.env.WAREHOUSE_AUTO_MIGRATE || "1",
     WAREHOUSE_ENABLE_SHUTDOWN: "1",
     WAREHOUSE_SHUTDOWN_TOKEN: shutdownToken,

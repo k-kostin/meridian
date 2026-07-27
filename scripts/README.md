@@ -65,7 +65,10 @@ Before moving to a real Windows machine, run from repo root:
 <repo>/.venv/bin/python manage.py test
 <repo>/.venv/bin/python scripts/check_public_readiness.py
 <repo>/.venv/bin/python scripts/smoke_sidecar.py --command <repo>/.venv/bin/python desktop/python_sidecar/serve.py
+<repo>/.venv/bin/python scripts/smoke_sidecar_migrations.py
 node --check desktop/electron_shell/src/main.js
 node --check desktop/electron_shell/scripts/check-packaging-contract.js
-cd desktop/electron_shell && npm run check:contract
+cd desktop/electron_shell && npm ci && npm run check:contract
 ```
+
+Первый smoke проходит полный fresh-profile flow: справочники, приход, проведение, остатки, Excel, ручной backup и повторный запуск. Второй проверяет защитную копию при реальном upgrade схемы и отсутствие новых копий при no-op restart.

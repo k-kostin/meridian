@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import sys
 from pathlib import Path
 
@@ -37,6 +38,15 @@ def env_flag(name: str, default: bool = False) -> bool:
     return raw_value in {"1", "true", "True", "yes", "on"}
 
 
+def has_pending_migrations() -> bool:
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+
+    executor = MigrationExecutor(connection)
+    targets = executor.loader.graph.leaf_nodes()
+    return bool(executor.migration_plan(targets))
+
+
 def build_wsgi_application():
     import django
 
@@ -45,15 +55,28 @@ def build_wsgi_application():
     if env_flag("WAREHOUSE_AUTO_MIGRATE", default=True):
         from django.core.management import call_command
 
-        from warehouse_app.backups import BackupError, create_pre_migration_backup_if_needed
+        from warehouse_app.backups import (
+            BackupError,
+            configured_backup_paths,
+            create_pre_migration_backup_if_needed,
+            prune_pre_migration_backups,
+        )
 
-        try:
-            create_pre_migration_backup_if_needed()
-        except BackupError as exc:
-            print(f"Pre-migration backup failed: {exc}", file=sys.stderr)
-            raise
+        database_existed = configured_backup_paths().database_path.exists()
+        if has_pending_migrations():
+            if database_existed:
+                try:
+                    create_pre_migration_backup_if_needed()
+                except BackupError as exc:
+                    print(f"Pre-migration backup failed: {exc}", file=sys.stderr)
+                    raise
 
-        call_command("migrate", interactive=False, verbosity=0)
+            call_command("migrate", interactive=False, verbosity=0)
+            retention = int(os.getenv("WAREHOUSE_PRE_MIGRATION_BACKUP_RETENTION", "5"))
+            try:
+                prune_pre_migration_backups(keep=retention)
+            except BackupError as exc:
+                print(f"Pre-migration backup retention failed: {exc}", file=sys.stderr)
 
     from config.wsgi import application
     from django.contrib.staticfiles.handlers import StaticFilesHandler
@@ -72,7 +95,7 @@ def main() -> None:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
     os.environ.setdefault("DJANGO_DEBUG", "0")
     os.environ.setdefault("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost")
-    os.environ.setdefault("DJANGO_SECRET_KEY", "desktop-local-key-change-me")
+    os.environ.setdefault("DJANGO_SECRET_KEY", secrets.token_urlsafe(48))
     os.environ.setdefault("WAREHOUSE_DATA_DIR", str(data_dir))
     os.environ.setdefault("DJANGO_DB_PATH", str(data_dir / "db.sqlite3"))
 

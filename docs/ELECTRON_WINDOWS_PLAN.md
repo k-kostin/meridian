@@ -1,6 +1,6 @@
 # ELECTRON_WINDOWS_PLAN.md
 
-Последнее обновление: 2026-05-08
+Последнее обновление: 2026-07-27
 
 Этот документ фиксирует актуальный рабочий путь для Windows desktop-доставки:
 
@@ -101,6 +101,8 @@ Electron shell:
 - при закрытии приложения завершает sidecar;
 - использует single-instance lock;
 - не хранит SQLite в install directory.
+- включает отдельный `WAREHOUSE_LOCAL_TRUSTED_MODE` только для loopback desktop-процесса;
+- создает и повторно использует уникальный `DJANGO_SECRET_KEY` из userData, не из bundled resources.
 
 ## 7. Data layout
 
@@ -108,6 +110,8 @@ Electron shell:
 
 ```text
 %LOCALAPPDATA%/<AppName>/data/db.sqlite3
+%LOCALAPPDATA%/<AppName>/data/django-secret.key
+%LOCALAPPDATA%/<AppName>/data/backups/
 %LOCALAPPDATA%/<AppName>/logs/desktop.log
 ```
 
@@ -120,6 +124,8 @@ app.getPath("userData")/logs/desktop.log
 
 ## 8. Build flow
 
+Build prerequisites: Node.js `22.12+`, npm `10+`, Python согласно `requirements.txt`. Electron и electron-builder закреплены lock-файлом; Windows build использует `npm ci`. PyInstaller собирает `onedir` без UPX.
+
 Mac preflight before switching to Windows:
 
 ```bash
@@ -127,7 +133,8 @@ Mac preflight before switching to Windows:
 <repo>/.venv/bin/python manage.py test
 <repo>/.venv/bin/python scripts/check_public_readiness.py
 <repo>/.venv/bin/python scripts/smoke_sidecar.py --command <repo>/.venv/bin/python desktop/python_sidecar/serve.py
-cd desktop/electron_shell && npm run check:contract
+<repo>/.venv/bin/python scripts/smoke_sidecar_migrations.py
+cd desktop/electron_shell && npm ci && npm run check:contract
 ```
 
 Windows flow:
@@ -140,6 +147,10 @@ Windows flow:
    - `desktop\build\build-electron-windows.bat`
 4. Install through generated NSIS artifact without admin rights.
 5. Verify first launch, shutdown, relaunch, Excel export, and data persistence.
+6. Verify Defender/EDR behavior with unsigned PyInstaller `onedir` sidecar and record false positives.
+7. Verify upgrade over an existing database: one pre-migration backup is created and application data remains intact.
+
+Code signing is not complete until real certificates are configured and both installer and executable artifacts are verified as signed. Do not describe current artifacts as signed.
 
 ## 9. Первый milestone
 

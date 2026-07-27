@@ -33,7 +33,7 @@ if errorlevel 1 exit /b %errorlevel%
 cd /d "desktop\electron_shell" || exit /b 1
 
 echo Installing Electron dependencies...
-call npm install
+call npm ci
 if errorlevel 1 exit /b %errorlevel%
 
 echo Checking Electron packaging contract...
