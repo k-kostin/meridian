@@ -56,6 +56,7 @@ from .services import (
     export_balances_xlsx,
     export_daily_ledger_xlsx,
     export_inventories_xlsx,
+    export_items_xlsx,
     export_monthly_ledger_xlsx,
     export_movements_xlsx,
     export_period_analysis_xlsx,
@@ -2015,6 +2016,67 @@ class WarehouseFlowTests(TestCase):
         monthly_workbook = load_workbook(monthly_export.buffer)
         monthly_sheet = monthly_workbook["Месяцы"]
         self.assertEqual(monthly_sheet.cell(row=2, column=1).number_format, "MM.YYYY")
+
+    def test_excel_exports_neutralize_formula_like_text_but_keep_numbers_typed(self):
+        self.unit.code = "@unit"
+        self.unit.save(update_fields=["code"])
+        self.warehouse.name = "\rWarehouse"
+        self.warehouse.save(update_fields=["name"])
+        self.item.sku = "=1+1"
+        self.item.name = "+SUM(A1:A2)"
+        self.item.notes = "\tunsafe"
+        self.item.save(update_fields=["sku", "name", "notes"])
+        receipt = StockDocument.objects.create(
+            document_type=StockDocumentType.RECEIPT,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 1),
+        )
+        StockDocumentLine.objects.create(document=receipt, item=self.item, quantity=Decimal("3"))
+        receipt.post()
+        issue = StockDocument.objects.create(
+            document_type=StockDocumentType.ISSUE,
+            warehouse=self.warehouse,
+            operation_date=date(2026, 3, 4),
+        )
+        StockDocumentLine.objects.create(
+            document=issue,
+            item=self.item,
+            quantity=Decimal("-2"),
+            comment="-unsafe",
+        )
+        issue.post()
+
+        items_sheet = load_workbook(export_items_xlsx().buffer)["Номенклатура"]
+        self.assertEqual(items_sheet.cell(row=2, column=1).value, "'=1+1")
+        self.assertEqual(items_sheet.cell(row=2, column=2).value, "'+SUM(A1:A2)")
+        self.assertEqual(items_sheet.cell(row=2, column=3).value, "'@unit")
+        self.assertEqual(items_sheet.cell(row=2, column=5).value, "'\tunsafe")
+        for column_number in (1, 2, 3, 5):
+            self.assertEqual(items_sheet.cell(row=2, column=column_number).data_type, "s")
+
+        movements_sheet = load_workbook(export_movements_xlsx().buffer)["Движения"]
+        issue_row_number = next(
+            row_number
+            for row_number in range(2, movements_sheet.max_row + 1)
+            if movements_sheet.cell(row=row_number, column=3).value == "Расход"
+        )
+        warehouse_cell = movements_sheet.cell(row=issue_row_number, column=4)
+        self.assertTrue(warehouse_cell.value.startswith("'"))
+        self.assertTrue(warehouse_cell.value.endswith("Warehouse"))
+        self.assertEqual(warehouse_cell.data_type, "s")
+        self.assertEqual(movements_sheet.cell(row=issue_row_number, column=8).value, "'-unsafe")
+        self.assertEqual(movements_sheet.cell(row=issue_row_number, column=7).value, -2)
+        self.assertEqual(movements_sheet.cell(row=issue_row_number, column=7).data_type, "n")
+
+        metadata_sheet = load_workbook(
+            export_balances_xlsx(query="=HYPERLINK(\"https://example.invalid\")").buffer
+        )["Параметры"]
+        metadata = {
+            metadata_sheet.cell(row=row_number, column=1).value: metadata_sheet.cell(row=row_number, column=2)
+            for row_number in range(2, metadata_sheet.max_row + 1)
+        }
+        self.assertEqual(metadata["Поиск"].value, "'=HYPERLINK(\"https://example.invalid\")")
+        self.assertEqual(metadata["Поиск"].data_type, "s")
 
     def test_period_report_grand_total_consolidated(self):
         receipt = StockDocument.objects.create(

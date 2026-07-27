@@ -944,7 +944,21 @@ def _append_metadata_sheet(workbook, metadata_rows):
     sheet.column_dimensions["B"].width = 42
 
 
+def _excel_safe_text(value):
+    if isinstance(value, str) and value.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return f"'{value}"
+    return value
+
+
+def _sanitize_workbook_text(workbook):
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.value = _excel_safe_text(cell.value)
+
+
 def _workbook_export(workbook, filename):
+    _sanitize_workbook_text(workbook)
     buffer = BytesIO()
     workbook.save(buffer)
     buffer.seek(0)

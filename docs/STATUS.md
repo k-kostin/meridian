@@ -5,11 +5,11 @@
 ## Version Baseline
 
 - `v0.1 MVP Baseline` is frozen in `docs/releases/v0.1-mvp-baseline.md`.
-- Current development state: Stage C commercial pilot readiness is in progress after `v0.4.0` Stage B closure.
+- Current development state: Stage C automated release gate is represented by the `v0.5.0-rc.1` candidate after `v0.4.0` Stage B closure.
 - Stage A stabilization audit: passed on 2026-06-04.
 - Stage B operational contour audit: passed on 2026-06-08.
-- Stage C backend/data/import slices are mostly implemented, but `v0.5.0` is not closed until the release/audit gate decision.
-- UI/package version: `v0.4.0`.
+- Stage C automated code/release gate is closed as `v0.5.0-rc.1`; final `v0.5.0` still requires real-client Excel acceptance.
+- UI/package version: `v0.5.0-rc.1`.
 - Future milestone targets: `v0.5.0` for commercial pilot readiness, `v0.6.0` for desktop packaging reliability, `v0.7.0` for focused operational analytics, `v0.8.0` for Team / Multi-User server profile, `v0.9.0` for planning/forecasting, `v0.10.x` for heavy-list performance experiments if needed, and `v1.0.0` only for the first stable pilot/production-ready release.
 - Next-version work must preserve the baseline do-not-regress list.
 
@@ -73,7 +73,8 @@
 - в справочнике единиц видна точность отображения количества (`display_precision`);
 - DB-level уникальность строк по позиции защищена в документах движения и инвентаризациях;
 - перемещение между складами корректно влияет на остатки, отчеты и Excel-выгрузку движений;
-- версия приложения `v0.4.0` видна в интерфейсе и синхронизирована с Electron package version;
+- версия приложения `v0.5.0-rc.1` видна в интерфейсе и синхронизирована с Electron package version;
+- все Excel-выгрузки централизованно нейтрализуют formula-like пользовательский текст, сохраняя даты и количества типизированными ячейками;
 - базовая role-aware UX-модель для авторизованных пользователей:
   - `admin` может выполнять все действия;
   - `operator` может выполнять складские операции, но не редактировать справочники и не перезагружать демо-данные;
@@ -244,8 +245,8 @@ python manage.py test
 ## Рекомендуемые следующие шаги
 
 1. Проверить настоящие клиентские Excel-файлы для onboarding/import flow, когда они будут доступны.
-2. Решить, закрывать ли `v0.5.0` до Windows installer validation или считать installer обязательной частью commercial pilot gate.
-3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat`.
+2. После реальных Excel acceptance tests решить, снимать ли prerelease marker и выпускать `v0.5.0`.
+3. Собрать Electron shell на Windows через `desktop\build\build-electron-windows.bat` как Stage D / `v0.6.0` gate.
 4. Проверить NSIS per-user installer на реальной Windows-машине без admin-прав.
 5. После desktop packaging перейти к focused operational analytics, если не появится более срочный multi-user спрос.
 6. Для нескольких рабочих мест отдельно планировать `Team / Multi-User` Stage F: server/PostgreSQL profile, concurrent operations validation and server backup policy.

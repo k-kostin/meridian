@@ -29,7 +29,8 @@
   - построение расширенных остатков (`приход / расход / остаток`, нулевые позиции по запросу);
   - построение плоских отчетов `Дни` и `Месяцы`;
   - расчет периодной аналитики;
-  - построение Excel workbook payload без знания про HTTP.
+  - построение Excel workbook payload без знания про HTTP;
+  - централизованная нейтрализация formula-like пользовательского текста перед сохранением workbook.
 - `activity.py`
   - запись и чтение операционной истории событий;
   - idempotent event creation for posting workflows.
@@ -49,7 +50,8 @@
   - не является workspace/account model и не реализует object-level permissions.
 - `permissions.py`
   - центральные role helper-функции и decorators для server-side запрета write-действий;
-  - анонимный локальный режим сознательно сохраняет текущие MVP-права для demo/desktop совместимости.
+  - demo mode и explicit `WAREHOUSE_LOCAL_TRUSTED_MODE` дают локальному анонимному пользователю MVP-права;
+  - обычный production web anonymous остается viewer, trusted-local profile допускается только с loopback desktop host.
 - `demo.py`
   - безопасная проверка, что база пуста;
   - загрузка демонстрационного набора данных;
@@ -75,7 +77,8 @@
   - быстрый fallback-shell без UI rewrite.
 - `desktop/electron_shell`
   - основной Windows desktop-shell;
-  - запускает Python sidecar, ждет `/healthz/`, открывает Django UI в окне.
+  - запускает Python sidecar, ждет `/healthz/`, открывает Django UI в окне;
+  - создает стабильный per-install Django secret в user data и включает trusted-local profile только для loopback sidecar.
 - `desktop/tauri_shell`
   - экспериментальный desktop-shell для Windows packaging.
 - `desktop/build`
@@ -117,7 +120,8 @@
 - Desktop-shell выбирает профиль запуска и передает конфигурацию sidecar, но не переносит в себя доменные правила, отчеты, import/export или логику остатков.
 - Backup/restore layer относится к deployment safety, а не к доменной складской логике.
 - Web UI может создавать и скачивать backup, но restore выполняется вне активного web request через management command.
-- Desktop sidecar обязан создавать pre-migration backup перед автоматическим `migrate` для существующей SQLite-базы.
+- Desktop sidecar создает pre-migration backup только при непустом плане миграций существующей SQLite-базы; новая и актуальная базы не порождают автоматические копии.
+- Retention применяется только к автоматическим pre-migration backup; ручные копии не удаляются.
 
 ## Когда нужно рефакторить дальше
 

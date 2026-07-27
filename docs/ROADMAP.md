@@ -2,7 +2,7 @@
 
 Практическая дорожная карта развития проекта после текущего MVP.
 
-Последнее обновление: 2026-06-11
+Последнее обновление: 2026-07-27
 
 ## 0. Версионная рамка
 
@@ -14,6 +14,7 @@
 - `v0.3.0` — Stage A closure milestone: import/onboarding flow, стартовые остатки через инвентаризацию и audit gate закрытого MVP-контура.
 - `v0.4.0` — Stage B operational contour: рабочие web-flow улучшения для повседневной эксплуатации.
 - `v0.5.0` — commercial pilot readiness: backup/restore, user attribution, audit hardening, deployment limits and Excel onboarding validation.
+- `v0.5.0-rc.1` — автоматизированный code/release gate Stage C; финальный `v0.5.0` остается за реальными Excel acceptance tests.
 - `v0.6.0` — desktop/GUI packaging reliability for the `Local Single User` profile.
 - `v0.7.0` — focused operational analytics.
 - `v0.8.0` — `Team / Multi-User` server profile: PostgreSQL deployment, concurrent operations validation and server backup policy.
@@ -113,7 +114,7 @@ Stage A audit gate passed on 2026-06-04; new product work should continue from S
 
 Цель: сделать текущий маленький складской desk безопасным для первого реального клиента, а не просто функционально интересным demo.
 
-Статус: почти закрыт по backend/data/import части, но не закрыт как `v0.5.0` milestone до финального audit/release gate.
+Статус: автоматизированный code gate закрыт как `v0.5.0-rc.1`; финальный `v0.5.0` не ставится до проверки реальных клиентских Excel-файлов.
 
 Почему этот этап идет перед аналитикой:
 
@@ -161,11 +162,12 @@ Synthetic validation slice implemented: parser and UI now cover realistic sheet 
 
 Synthetic Excel import smoke implemented: generated realistic `.xlsx` files were passed through item import and opening stock import UI endpoints. Positive files previewed/committed successfully; negative files produced expected row-level errors and did not create invalid records.
 
-Остаток для закрытия `v0.5.0`:
+Остаток для закрытия финального `v0.5.0`:
 
 - проверить настоящие клиентские Excel-файлы, когда они появятся;
-- решить, закрывать ли `v0.5.0` до Windows installer validation или держать installer как обязательный gate;
-- оформить короткий `v0.5.0` release/audit note после этого решения.
+- зафиксировать результат в release/audit note и убрать prerelease marker.
+
+Windows installer validation относится к Stage D / `v0.6.0` и не блокирует code-level `v0.5.0-rc.1`, но без него приложение нельзя выдавать как готовый Windows desktop release.
 
 Не включать в этот этап:
 
@@ -195,8 +197,8 @@ Synthetic Excel import smoke implemented: generated realistic `.xlsx` files were
 
 Минимальный план:
 
-1. Поднять локальный sidecar на `waitress`.
-2. Завести Electron shell вокруг sidecar.
+1. Поднять локальный sidecar на `waitress`. Выполнено.
+2. Завести Electron shell вокруг sidecar. Выполнено на уровне source/contract.
 3. Подготовить NSIS per-user installer.
 4. Проверить установку без admin-прав, Excel-выгрузки и SQLite data-dir.
 5. Проверить Tauri отдельно как эксперимент, не блокирующий Electron-релиз.
