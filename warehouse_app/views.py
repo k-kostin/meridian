@@ -447,28 +447,40 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         try:
             parsed_result = parse_items_import_workbook(form.cleaned_data["workbook"])
+        except Exception:
+            logger.exception("Failed to parse item import workbook.")
+            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
+        else:
             import_mode = form.cleaned_data["import_mode"]
             auto_create_units = form.cleaned_data.get("auto_create_units", False)
             if action == "commit":
-                commit_result = commit_items_import(
-                    parsed_result,
-                    import_mode=import_mode,
-                    auto_create_units=auto_create_units,
-                )
-                result = ItemImportResult(rows=parsed_result.rows, errors=commit_result.errors)
-                if not commit_result.errors:
-                    record_item_import_committed(
-                        created_count=commit_result.created_count,
-                        updated_count=commit_result.updated_count,
-                        import_mode=import_mode,
-                        auto_create_units=auto_create_units,
-                        actor=authenticated_actor(request),
-                    )
-                    if commit_result.created_count:
-                        messages.success(request, f"Импортировано позиций: {commit_result.created_count}.")
-                    if commit_result.updated_count:
-                        messages.success(request, f"Импорт обновил позиций: {commit_result.updated_count}.")
-                    return redirect("item_list")
+                actor = authenticated_actor(request)
+                try:
+                    with transaction.atomic():
+                        commit_result = commit_items_import(
+                            parsed_result,
+                            import_mode=import_mode,
+                            auto_create_units=auto_create_units,
+                        )
+                        result = ItemImportResult(rows=parsed_result.rows, errors=commit_result.errors)
+                        if not commit_result.errors:
+                            record_item_import_committed(
+                                created_count=commit_result.created_count,
+                                updated_count=commit_result.updated_count,
+                                import_mode=import_mode,
+                                auto_create_units=auto_create_units,
+                                actor=actor,
+                            )
+                except Exception:
+                    logger.exception("Failed to commit item import.")
+                    form.add_error(None, "Импорт не выполнен. Данные не изменены.")
+                else:
+                    if not commit_result.errors:
+                        if commit_result.created_count:
+                            messages.success(request, f"Импортировано позиций: {commit_result.created_count}.")
+                        if commit_result.updated_count:
+                            messages.success(request, f"Импорт обновил позиций: {commit_result.updated_count}.")
+                        return redirect("item_list")
             else:
                 validation_errors = validate_items_import_result(
                     parsed_result,
@@ -477,8 +489,6 @@ def item_import_preview(request: HttpRequest) -> HttpResponse:
                 )
                 result = ItemImportResult(rows=parsed_result.rows, errors=validation_errors)
             has_preview = True
-        except Exception:
-            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
 
     return render(
         request,
@@ -771,27 +781,40 @@ def opening_inventory_import_preview(request: HttpRequest) -> HttpResponse:
     if request.method == "POST" and form.is_valid():
         try:
             parsed_result = parse_opening_inventory_import_workbook(form.cleaned_data["workbook"])
+        except Exception:
+            logger.exception("Failed to parse opening inventory import workbook.")
+            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
+        else:
             if action == "commit":
-                commit_result = commit_opening_inventory_import(parsed_result)
-                result = OpeningInventoryImportResult(rows=parsed_result.rows, errors=commit_result.errors)
-                if commit_result.inventory and not commit_result.errors:
-                    record_opening_inventory_import_committed(
-                        inventory=commit_result.inventory,
-                        created_lines_count=commit_result.created_lines_count,
-                        actor=authenticated_actor(request),
-                    )
-                    messages.success(
-                        request,
-                        f"Создан черновик инвентаризации {commit_result.inventory.number}. "
-                        f"Строк: {commit_result.created_lines_count}.",
-                    )
-                    return redirect("inventory_detail", pk=commit_result.inventory.pk)
+                actor = authenticated_actor(request)
+                try:
+                    with transaction.atomic():
+                        commit_result = commit_opening_inventory_import(
+                            parsed_result,
+                            actor=actor,
+                        )
+                        result = OpeningInventoryImportResult(rows=parsed_result.rows, errors=commit_result.errors)
+                        if commit_result.inventory and not commit_result.errors:
+                            record_opening_inventory_import_committed(
+                                inventory=commit_result.inventory,
+                                created_lines_count=commit_result.created_lines_count,
+                                actor=actor,
+                            )
+                except Exception:
+                    logger.exception("Failed to commit opening inventory import.")
+                    form.add_error(None, "Импорт не выполнен. Данные не изменены.")
+                else:
+                    if commit_result.inventory and not commit_result.errors:
+                        messages.success(
+                            request,
+                            f"Создан черновик инвентаризации {commit_result.inventory.number}. "
+                            f"Строк: {commit_result.created_lines_count}.",
+                        )
+                        return redirect("inventory_detail", pk=commit_result.inventory.pk)
             else:
                 validation_errors = validate_opening_inventory_import_result(parsed_result)
                 result = OpeningInventoryImportResult(rows=parsed_result.rows, errors=validation_errors)
             has_preview = True
-        except Exception:
-            form.add_error(None, "Не удалось прочитать Excel-файл. Проверьте формат .xlsx.")
 
     return render(
         request,

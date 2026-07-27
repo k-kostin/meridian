@@ -887,6 +887,64 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(event.metadata["updated_count"], 0)
         self.assertEqual(event.metadata["import_mode"], "create_only")
 
+    def test_item_import_rolls_back_data_when_operational_activity_fails(self):
+        admin = User.objects.create_user(username="admin-import-audit-failure", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        workbook = self._import_workbook_upload(
+            [["SKU-AUDIT-FAIL", "Импорт с ошибкой аудита", "box", "да", ""]]
+        )
+
+        with self.assertLogs("warehouse_app.views", level="ERROR"):
+            with patch(
+                "warehouse_app.views.record_item_import_committed",
+                side_effect=RuntimeError("activity write failed"),
+            ):
+                response = self.client.post(
+                    "/items/import/",
+                    {
+                        "action": "commit",
+                        "import_mode": "create_only",
+                        "auto_create_units": "1",
+                        "workbook": workbook,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Импорт не выполнен. Данные не изменены.")
+        self.assertNotContains(response, "Не удалось прочитать Excel-файл")
+        self.assertFalse(Item.objects.filter(sku="SKU-AUDIT-FAIL").exists())
+        self.assertFalse(Unit.objects.filter(code="box").exists())
+
+    def test_item_import_rolls_back_updates_when_operational_activity_fails(self):
+        admin = User.objects.create_user(username="admin-update-import-audit-failure", password="pass")
+        UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
+        self.client.force_login(admin)
+        original_name = self.item.name
+        workbook = self._import_workbook_upload(
+            [[self.item.sku, "Имя не должно сохраниться", self.unit.code, "нет", ""]]
+        )
+
+        with self.assertLogs("warehouse_app.views", level="ERROR"):
+            with patch(
+                "warehouse_app.views.record_item_import_committed",
+                side_effect=RuntimeError("activity write failed"),
+            ):
+                response = self.client.post(
+                    "/items/import/",
+                    {
+                        "action": "commit",
+                        "import_mode": "update_existing",
+                        "workbook": workbook,
+                    },
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Импорт не выполнен. Данные не изменены.")
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.name, original_name)
+        self.assertTrue(self.item.is_active)
+
     def test_item_import_update_mode_rejects_new_sku(self):
         admin = User.objects.create_user(username="update-mode-new-sku-admin", password="pass")
         UserProfile.objects.create(user=admin, role=UserRole.ADMIN)
@@ -1172,6 +1230,8 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(inventory.status, DocumentStatus.DRAFT)
         self.assertEqual(inventory.scope, InventoryScope.FULL)
         self.assertEqual(inventory.lines.count(), 1)
+        self.assertEqual(inventory.created_by, operator)
+        self.assertEqual(inventory.updated_by, operator)
 
     def test_opening_inventory_import_commit_records_operational_activity(self):
         operator = User.objects.create_user(username="operator-opening-import-audit", password="pass")
@@ -1189,6 +1249,28 @@ class WarehouseFlowTests(TestCase):
         self.assertEqual(event.inventory_document, inventory)
         self.assertEqual(event.warehouse, self.warehouse)
         self.assertEqual(event.metadata["created_lines_count"], 1)
+
+    def test_opening_inventory_import_rolls_back_when_operational_activity_fails(self):
+        operator = User.objects.create_user(username="operator-opening-import-audit-failure", password="pass")
+        UserProfile.objects.create(user=operator, role=UserRole.OPERATOR)
+        self.client.force_login(operator)
+        workbook = self._opening_inventory_workbook_upload([[self.warehouse.code, self.item.sku, 7, "commit"]])
+
+        with self.assertLogs("warehouse_app.views", level="ERROR"):
+            with patch(
+                "warehouse_app.views.record_opening_inventory_import_committed",
+                side_effect=RuntimeError("activity write failed"),
+            ):
+                response = self.client.post(
+                    "/inventories/import-opening/",
+                    {"action": "commit", "workbook": workbook},
+                )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Импорт не выполнен. Данные не изменены.")
+        self.assertNotContains(response, "Не удалось прочитать Excel-файл")
+        self.assertEqual(InventoryDocument.objects.count(), 0)
+        self.assertEqual(InventoryLine.objects.count(), 0)
 
     def _receipt(self, item, quantity):
         document = StockDocument.objects.create(
@@ -3116,10 +3198,14 @@ class UserAttributionModelTests(TestCase):
 
         inventory.post(posted_by=self.user)
         inventory.refresh_from_db()
+        adjustment = inventory.generated_documents.get()
 
         self.assertEqual(inventory.created_by, self.user)
         self.assertEqual(inventory.updated_by, self.user)
         self.assertEqual(inventory.posted_by, self.user)
+        self.assertEqual(adjustment.created_by, self.user)
+        self.assertEqual(adjustment.updated_by, self.user)
+        self.assertEqual(adjustment.posted_by, self.user)
 
     def test_stock_document_posted_event_stores_actor(self):
         document = StockDocument.objects.create(
